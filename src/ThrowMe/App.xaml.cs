@@ -21,6 +21,38 @@ public partial class App : Application
     private TrayIconService? _tray;
     private AppSettings? _settings;
 
+    /// <summary>중복 실행 방지용. 프로세스가 살아 있는 동안 잡고 있는다.</summary>
+    private System.Threading.Mutex? _singleInstance;
+
+    /// <summary>
+    /// 이 사용자 세션에서 하나만 실행되도록 잠근다. 이미 떠 있으면 false.
+    /// 업데이트 교체 직후처럼 이전 프로세스가 막 끝나는 중일 수 있어 잠깐 재시도한다.
+    /// </summary>
+    private bool AcquireSingleInstance(string? profile)
+    {
+        // Local\ 접두사 = 로그인 세션 단위. 프로필을 쓰면 프로필별로 하나씩 허용(테스트).
+        string name = string.IsNullOrWhiteSpace(profile)
+            ? @"Local\ThrowMe.SingleInstance"
+            : $@"Local\ThrowMe.SingleInstance.{profile}";
+
+        for (int attempt = 0; attempt < 12; attempt++) // 최대 약 3초
+        {
+            try
+            {
+                var mutex = new System.Threading.Mutex(initiallyOwned: true, name, out bool created);
+                if (created) { _singleInstance = mutex; return true; }
+                mutex.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Single-instance check failed; allowing start.", ex);
+                return true; // 잠금 실패로 앱을 못 켜게 하지는 않는다
+            }
+            System.Threading.Thread.Sleep(250);
+        }
+        return false;
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -51,6 +83,16 @@ public partial class App : Application
             SettingsStore.Profile = profile;
             AuthService.Profile = profile;
             Logger.Info($"Using settings profile '{profile}'.");
+        }
+
+        // 중복 실행 방지. 여러 개가 켜지면 공이 여러 마리로 보이고, 같은 설정 파일을 서로
+        // 덮어쓰며, 방에도 같은 이름으로 중복 접속해 서로를 밀어낸다.
+        // 프로필을 지정한 경우(테스트용 다중 인스턴스)는 프로필별로 하나씩 허용한다.
+        if (!AcquireSingleInstance(profile))
+        {
+            Logger.Info("Another instance is already running; exiting.");
+            Shutdown();
+            return;
         }
 
         Logger.Info("ThrowMe starting.");
@@ -158,6 +200,27 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// 종료 시 남아 있는 모든 창을 닫는다. 테마가 띄운 보조 창(볼링 레인/핀/점수판, 농구골대,
+    /// 이펙트 오버레이 등)이 어떤 이유로든 정리되지 않으면 공만 사라지고 그것들만 화면에 남는다.
+    /// </summary>
+    private static void CloseAllRemainingWindows()
+    {
+        try
+        {
+            // Close() 가 컬렉션을 바꾸므로 복사본을 순회한다.
+            foreach (Window w in Current.Windows.Cast<Window>().ToList())
+            {
+                try { w.Close(); }
+                catch (Exception ex) { Logger.Error($"Failed to close window '{w.GetType().Name}'.", ex); }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("CloseAllRemainingWindows failed.", ex);
+        }
+    }
+
     private void RegisterGlobalExceptionHandlers()
     {
         DispatcherUnhandledException += (_, args) =>
@@ -188,6 +251,16 @@ public partial class App : Application
             _store?.Dispose();
 
             _monitorService?.Dispose();
+
+            // 마지막 안전망: 그래도 남아 있는 창(볼링 레인·핀·점수판, 농구골대, 오버레이 등)을 닫는다.
+            // 테마가 띄우는 창이 늘어나도 여기서 한 번에 걸러진다.
+            CloseAllRemainingWindows();
+
+            // 다음 실행이 곧바로 켜질 수 있도록 잠금을 놓는다(업데이트 재시작 포함).
+            try { _singleInstance?.ReleaseMutex(); } catch { /* 소유 아님 */ }
+            _singleInstance?.Dispose();
+            _singleInstance = null;
+
             Logger.Info("ThrowMe exited.");
         }
         catch (Exception ex)

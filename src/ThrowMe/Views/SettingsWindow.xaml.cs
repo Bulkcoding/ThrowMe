@@ -693,6 +693,14 @@ public partial class SettingsWindow : Window
         bool host = _slime.IsHost;
         NetLeaveBtn.Visibility = _slime.RelayAuth.Enabled ? Visibility.Visible : Visibility.Collapsed;
 
+        // 이미 방장인데 '입장' 탭이 남아 있으면 헷갈린다(내 방에 다시 입장하는 것처럼 보임).
+        // 방장일 때는 감추고 '방 생성' 쪽으로 고정한다.
+        TabJoin.Visibility = host ? Visibility.Collapsed : Visibility.Visible;
+        if (host && TabJoin.IsChecked == true)
+        {
+            TabCreate.IsChecked = true; // Checked 이벤트가 패널 전환까지 처리
+        }
+
         // 방 공통 테마는 방장에게만 노출.
         RoomThemePanel.Visibility = host && shown.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (RoomThemePanel.Visibility == Visibility.Visible) SyncRoomThemeCombo();
@@ -733,8 +741,10 @@ public partial class SettingsWindow : Window
     {
         if (RoomThemeCombo.Items.Count == 0)
         {
+            // 스타일을 안 주면 시스템 기본(검은 글씨)이라 어두운 배경에서 안 보인다.
+            var itemStyle = (Style)FindResource("DarkComboItem");
             foreach (var (kind, name) in Skins)
-                RoomThemeCombo.Items.Add(new ComboBoxItem { Content = name, Tag = kind });
+                RoomThemeCombo.Items.Add(new ComboBoxItem { Content = name, Tag = kind, Style = itemStyle });
         }
 
         _syncingRoomTheme = true;
@@ -806,7 +816,10 @@ public partial class SettingsWindow : Window
             Width = 92, Height = 54,
             CornerRadius = new CornerRadius(6),
             Background = (Brush)FindResource("WinBg"),
-            BorderBrush = (Brush)FindResource(isSelf ? "Accent" : "DarkSeparator"),
+            // DarkSeparator 는 Brush 가 아니라 Style 이다. 여기에 캐스팅하면
+            // InvalidCastException 이 나면서 파티 목록이 통째로 안 그려졌다(그리고 그 예외가
+            // ApplyRoomState 를 타고 올라가 소유권 동기화까지 막았다).
+            BorderBrush = (Brush)FindResource(isSelf ? "Accent" : "TrackBg"),
             BorderThickness = new Thickness(isSelf ? 2 : 1),
         };
         if (hasBall)

@@ -206,6 +206,32 @@ public sealed class RelayClient : IDisposable
         try { StateChanged?.Invoke(s); } catch { /* ignore */ }
     }
 
+    /// <summary>
+    /// 방에서 정상적으로 나간다(앱 종료 시). WebSocket 종료 프레임을 보내면 서버가 즉시
+    /// 이탈로 처리해 남은 사람들의 파티 목록에서 바로 사라지고, 공 소유권도 곧장 넘어간다.
+    /// 그냥 프로세스를 끝내면 서버는 소켓이 끊긴 걸 뒤늦게 알아채므로 한동안 유령으로 남는다.
+    ///
+    /// 종료를 지연시키면 안 되므로 짧게 기다리고 포기한다.
+    /// </summary>
+    public async Task LeaveRoomAsync(int timeoutMs = 1200)
+    {
+        var ws = _ws;
+        if (ws is not { State: WebSocketState.Open }) return;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(timeoutMs);
+            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "leaving", cts.Token)
+                    .ConfigureAwait(false);
+            Logger.Info("Left room (websocket closed normally).");
+        }
+        catch (Exception ex)
+        {
+            // 네트워크가 이미 끊겼을 수 있다. 종료를 막지 않는다.
+            Logger.Info($"Graceful leave skipped: {ex.GetType().Name}");
+        }
+    }
+
     public void Dispose()
     {
         try { _cts?.Cancel(); } catch { /* ignore */ }

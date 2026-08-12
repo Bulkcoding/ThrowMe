@@ -1793,7 +1793,12 @@ public partial class SlimeWindow : Window
         Logger.Info($"Room state: host={host} owner-sync order=[{string.Join(",", _roomOrder)}] " +
                     $"online=[{string.Join(",", nodes.Select(n => n.NodeId))}]");
 
-        RoomStateChanged?.Invoke();
+        // 설정창 갱신에서 예외가 나도 여기서 끊어 낸다.
+        // 안 그러면 그 예외가 OnRelayMessage 까지 타고 올라가 뒤이어 실행돼야 할
+        // ApplyOwnership(소유권 동기화)이 통째로 건너뛰어지고, 결국 양쪽 PC 가 서로
+        // 공을 가진 줄 알아 화면에 공이 둘 생긴다. UI 문제로 공 관리가 깨지면 안 된다.
+        try { RoomStateChanged?.Invoke(); }
+        catch (Exception ex) { Logger.Error("RoomStateChanged handler threw (UI).", ex); }
     }
 
     /// <summary>릴레이 활성화(설정 존재 시). 물리 area 를 네트워크 인지형으로 교체.</summary>
@@ -1943,16 +1948,18 @@ public partial class SlimeWindow : Window
                     {
                         MergeLinksOnJoin(w.Links);
                     }
-                    ApplyRoomState(w.Host, w.Order, w.Nodes, w.Theme);
+                    // 소유권을 먼저 맞춘다. 방 상태(UI 갱신 포함)에서 문제가 생겨도
+                    // 공이 양쪽에 동시에 생기는 일은 없어야 한다.
                     ApplyOwnership(w.Owner);
+                    ApplyRoomState(w.Host, w.Order, w.Nodes, w.Theme);
                 }
                 break;
 
             case MsgType.Presence:
                 if (env.DataAs<PresenceData>() is { } p)
                 {
-                    ApplyRoomState(p.Host, p.Order, p.Nodes, p.Theme);
                     ApplyOwnership(p.Owner);
+                    ApplyRoomState(p.Host, p.Order, p.Nodes, p.Theme);
                 }
                 break;
 
@@ -2867,8 +2874,19 @@ public partial class SlimeWindow : Window
     {
         _shuttingDown = true;
         StopRendering();
+        StopHandoffWatchdog();
         ToastWindow.CloseAll();
-        _relay?.Dispose();
+
+        // 방에 들어가 있으면 먼저 정상적으로 나간다(서버가 즉시 이탈로 처리 → 상대 목록에서 바로 사라지고
+        // 공 소유권도 곧장 넘어간다). 종료가 늦어지지 않도록 짧게만 기다린다.
+        var relay = _relay;
+        _relay = null;
+        if (relay != null)
+        {
+            try { relay.LeaveRoomAsync().Wait(TimeSpan.FromSeconds(2)); }
+            catch (Exception ex) { Logger.Info($"Leave on shutdown skipped: {ex.GetType().Name}"); }
+            relay.Dispose();
+        }
         if (_hwnd != IntPtr.Zero)
         {
             UnregisterHotKey(_hwnd, CatchHotkeyId);
@@ -2882,17 +2900,22 @@ public partial class SlimeWindow : Window
         MouseMove -= OnMouseMove;
         MouseLeftButtonUp -= OnMouseLeftButtonUp;
 
-        ClearExtraBalls();
-        ClearHoops();
-        ExitBowling();
-        try { _aimOverlay?.Close(); } catch { }
-        _aimOverlay = null;
-        _overlay?.ShutdownCleanup();
-        _overlay?.Close();
-        _overlay = null;
-        _hitTextOverlay?.ShutdownCleanup();
-        _hitTextOverlay?.Close();
-        _hitTextOverlay = null;
-        _audio.Dispose();
+        // 테마가 띄운 창(당구공·농구골대·볼링 레인/핀/점수판)과 오버레이를 모두 정리한다.
+        // 각 단계를 따로 감싸는 이유: 한 곳에서 예외가 나면 그 뒤 정리가 통째로 건너뛰어져
+        // 공만 사라지고 볼링장·골대가 화면에 그대로 남았다.
+        Safe(ClearExtraBalls, nameof(ClearExtraBalls));
+        Safe(ClearHoops, nameof(ClearHoops));
+        Safe(ExitBowling, nameof(ExitBowling));
+        Safe(() => { _aimOverlay?.Close(); _aimOverlay = null; }, "AimOverlay");
+        Safe(() => { _overlay?.ShutdownCleanup(); _overlay?.Close(); _overlay = null; }, "ParticleOverlay");
+        Safe(() => { _hitTextOverlay?.ShutdownCleanup(); _hitTextOverlay?.Close(); _hitTextOverlay = null; }, "HitTextOverlay");
+        Safe(() => _audio.Dispose(), "Audio");
+    }
+
+    /// <summary>정리 단계 하나가 실패해도 나머지 정리는 계속되도록 감싼다.</summary>
+    private static void Safe(Action step, string name)
+    {
+        try { step(); }
+        catch (Exception ex) { Logger.Error($"Shutdown step '{name}' failed.", ex); }
     }
 }
