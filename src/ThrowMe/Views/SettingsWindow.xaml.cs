@@ -67,6 +67,7 @@ public partial class SettingsWindow : Window
         _slime.RelayStateChanged += st => Dispatcher.Invoke(() => UpdateNetStatus(st));
         // 방 멤버·순서·방장이 바뀌면 파티 목록을 다시 그린다.
         _slime.RoomStateChanged += OnRoomStateChanged;
+        _slime.RoomStyleChanged += OnRoomStyleChanged;
         RefreshNetworkPanel();
         UpdateThemeLock();
 
@@ -74,6 +75,7 @@ public partial class SettingsWindow : Window
         {
             _settings.PropertyChanged -= OnSettingsPropertyChanged;
             _slime.RoomStateChanged -= OnRoomStateChanged;
+            _slime.RoomStyleChanged -= OnRoomStyleChanged;
         };
     }
 
@@ -120,7 +122,44 @@ public partial class SettingsWindow : Window
     private bool _notesLoaded;
     private bool _notesLoading;
 
+    /// <summary>한 페이지에 보여줄 릴리스 수.</summary>
+    private const int NotesPerPage = 5;
+    private readonly List<UpdateService.ReleaseNotes> _allNotes = new();
+    private int _notesPage;   // 0-based
+
     private void OnRefreshNotes(object sender, RoutedEventArgs e) => _ = LoadReleaseNotesAsync(force: true);
+
+    private void OnNotesPrev(object sender, RoutedEventArgs e)
+    {
+        if (_notesPage > 0) { _notesPage--; RenderNotesPage(); }
+    }
+
+    private void OnNotesNext(object sender, RoutedEventArgs e)
+    {
+        if ((_notesPage + 1) * NotesPerPage < _allNotes.Count) { _notesPage++; RenderNotesPage(); }
+    }
+
+    /// <summary>현재 페이지에 해당하는 릴리스만 그린다.</summary>
+    private void RenderNotesPage()
+    {
+        NotesList.Items.Clear();
+
+        int total = _allNotes.Count;
+        int pages = Math.Max(1, (int)Math.Ceiling(total / (double)NotesPerPage));
+        _notesPage = Math.Clamp(_notesPage, 0, pages - 1);
+
+        string cur = UpdateService.Current.ToString(3);
+        foreach (var r in _allNotes.Skip(_notesPage * NotesPerPage).Take(NotesPerPage))
+            NotesList.Items.Add(BuildReleaseCard(r, isCurrent: r.Version == cur));
+
+        NotesPager.Visibility = total > NotesPerPage ? Visibility.Visible : Visibility.Collapsed;
+        NotesPageText.Text = $"{_notesPage + 1} / {pages}";
+        NotesPrevBtn.IsEnabled = _notesPage > 0;
+        NotesNextBtn.IsEnabled = _notesPage < pages - 1;
+
+        // 페이지를 넘기면 목록 위로 올려 준다.
+        NotesList.BringIntoView();
+    }
 
     /// <summary>릴리스 목록을 받아 버전별로 펼쳐 보여준다. 한 번 받아 두면 다시 받지 않는다.</summary>
     private async Task LoadReleaseNotesAsync(bool force)
@@ -136,18 +175,21 @@ public partial class SettingsWindow : Window
         {
             var releases = await UpdateService.FetchAllReleasesAsync();
             NotesList.Items.Clear();
+            _allNotes.Clear();
 
             if (releases.Count == 0)
             {
+                NotesPager.Visibility = Visibility.Collapsed;
                 NotesStatusText.Text = "릴리스 정보를 가져오지 못했습니다. 네트워크를 확인해 주세요.";
                 return;
             }
 
-            string cur = UpdateService.Current.ToString(3);
-            foreach (var r in releases)
-                NotesList.Items.Add(BuildReleaseCard(r, isCurrent: r.Version == cur));
+            _allNotes.AddRange(releases);
+            _notesPage = 0;
+            RenderNotesPage();
 
             _notesLoaded = true;
+            string cur = UpdateService.Current.ToString(3);
             NotesStatusText.Text = $"{releases.Count}개 버전";
             NotesHeaderText.Text = $"현재 v{cur} · 버전별로 무엇이 바뀌었는지 볼 수 있습니다.";
         }
@@ -619,6 +661,11 @@ public partial class SettingsWindow : Window
         UpdateThemeLock();
     });
 
+    private void OnRoomStyleChanged() => Dispatcher.Invoke(() =>
+    {
+        if (RoomThemePanel.Visibility == Visibility.Visible) RefreshRoomStyleSummary();
+    });
+
     /// <summary>
     /// 방에 들어가 있고 내가 방장이 아니면 테마 탭을 막는다.
     /// 방장의 테마·가중치·그림이 그대로 내려오므로 여기서 바꿔 봐야 곧 덮어써진다.
@@ -739,8 +786,9 @@ public partial class SettingsWindow : Window
             TabCreate.IsChecked = true; // Checked 이벤트가 패널 전환까지 처리
         }
 
-        // 방 공통 테마는 방장에게만 노출.
-        RoomThemePanel.Visibility = host && shown.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // 방 겉모습 요약은 방에 있는 모두에게 보여 준다(참가자도 방장이 뭘 골랐는지 알 수 있게).
+        RoomThemePanel.Visibility = shown.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (RoomThemePanel.Visibility == Visibility.Visible) RefreshRoomStyleSummary();
 
 
         PartyHint.Text = shown.Count == 0
@@ -772,6 +820,98 @@ public partial class SettingsWindow : Window
             : shown.Count == 1 ? "혼자 있는 방입니다. 다른 PC가 입장하면 좌우로 이어집니다." : "";
     }
 
+
+    // ── 방 겉모습 요약 ──────────────────────────────────────
+    private static string SkinLabel(string? name)
+    {
+        if (Enum.TryParse<SlimeSkinKind>(name, ignoreCase: true, out var k))
+        {
+            foreach (var (kind, label) in Skins) if (kind == k) return label;
+        }
+        return name ?? "-";
+    }
+
+    /// <summary>방장이 정한 테마·가중치·그림을 한눈에 보이게 정리한다(모두에게 표시).</summary>
+    private void RefreshRoomStyleSummary()
+    {
+        RoomStyleSummary.Children.Clear();
+
+        bool host = _slime.IsHost;
+        RoomStyleHint.Text = host
+            ? "'테마' 탭에서 고른 값이 방에 있는 모든 PC에 그대로 적용됩니다."
+            : $"방장({_slime.RoomHost})이 정한 설정이 적용되어 있습니다. 참가자는 바꿀 수 없습니다.";
+
+        var s = _slime.CurrentRoomStyle;
+        if (s == null)
+        {
+            RoomStyleSummary.Children.Add(new TextBlock
+            {
+                Text = host ? "테마를 고르면 여기에 표시됩니다." : "방장이 설정을 보내면 표시됩니다.",
+                Style = (Style)FindResource("RowDesc"),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        // 테마 이름 + 그림 여부
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        head.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            Background = (Brush)FindResource("Accent"),
+            Padding = new Thickness(9, 3, 9, 3),
+            Child = new TextBlock
+            {
+                Text = SkinLabel(s.Skin),
+                Foreground = Brushes.White,
+                FontSize = 11.5,
+                FontWeight = FontWeights.Bold,
+            },
+        });
+        if (!string.IsNullOrEmpty(s.ImageSkin) && s.SkinImageEnabled)
+        {
+            head.Children.Add(new TextBlock
+            {
+                Text = $"그림 적용 ({s.SkinImageScale * 100:0}%)",
+                Foreground = (Brush)FindResource("MutedBrush"),
+                FontSize = 11.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+            });
+        }
+        RoomStyleSummary.Children.Add(head);
+
+        AddRow("던지기 가중치", $"{s.ThrowPower:0.0}x");
+        AddRow("반발력", $"{s.Restitution:P0}");
+        AddRow("말랑함", $"{s.Softness:P0}");
+        AddRow("크기", $"{s.SlimeSize:0}px");
+
+        void AddRow(string name, string value)
+        {
+            var g = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var l = new TextBlock
+            {
+                Text = name,
+                Foreground = (Brush)FindResource("MutedBrush"),
+                FontSize = 12,
+            };
+            var v = new TextBlock
+            {
+                Text = value,
+                Foreground = (Brush)FindResource("TextBrush"),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+            };
+            Grid.SetColumn(l, 0);
+            Grid.SetColumn(v, 1);
+            g.Children.Add(l);
+            g.Children.Add(v);
+            RoomStyleSummary.Children.Add(g);
+        }
+    }
 
     /// <summary>카드 사이를 잇는 연결선(공이 지나가는 통로).</summary>
     private UIElement BuildConnector()

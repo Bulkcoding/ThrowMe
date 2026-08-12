@@ -436,13 +436,17 @@
                                         Click="OnJoinRoom"/>
                             </StackPanel>
 
-                            <!-- ── 방 겉모습 안내 (방장만) ──
+                            <!-- ── 방 겉모습 ──
                                  별도 콤보를 두지 않는다. 방장이 '테마' 탭에서 고른 테마·가중치·그림이
-                                 그대로 방 전체에 적용된다. -->
+                                 그대로 방 전체에 적용되고, 여기서는 그 내용을 모두가 확인만 한다. -->
                             <StackPanel x:Name="RoomThemePanel" Visibility="Collapsed">
                                 <TextBlock Text="방 겉모습" Style="{StaticResource Section}"/>
-                                <TextBlock Style="{StaticResource RowDesc}" TextWrapping="Wrap"
-                                           Text="'테마' 탭에서 고른 테마·가중치·그림이 방에 있는 모든 PC에 그대로 적용됩니다. 참가자는 테마를 바꿀 수 없습니다."/>
+                                <TextBlock x:Name="RoomStyleHint" Style="{StaticResource RowDesc}" TextWrapping="Wrap"
+                                           Text="방장이 정한 테마가 방 전체에 적용됩니다."/>
+                                <Border CornerRadius="10" Background="{StaticResource CardBg}"
+                                        Padding="14,12" Margin="0,10,0,0">
+                                    <StackPanel x:Name="RoomStyleSummary"/>
+                                </Border>
                             </StackPanel>
 
                             <!-- ── 파티원 (좌 → 우 배치) ── -->
@@ -471,6 +475,18 @@
                             </StackPanel>
 
                             <ItemsControl x:Name="NotesList" Margin="0,16,0,6"/>
+
+                            <!-- 페이지 이동 (한 페이지 5개) -->
+                            <StackPanel x:Name="NotesPager" Orientation="Horizontal"
+                                        HorizontalAlignment="Center" Margin="0,4,0,10"
+                                        Visibility="Collapsed">
+                                <Button x:Name="NotesPrevBtn" Style="{StaticResource GhostButton}"
+                                        Content="◀ 이전" MinWidth="86" Height="32" Click="OnNotesPrev"/>
+                                <TextBlock x:Name="NotesPageText" Style="{StaticResource RowDesc}"
+                                           VerticalAlignment="Center" Margin="14,0,14,0" Text=""/>
+                                <Button x:Name="NotesNextBtn" Style="{StaticResource GhostButton}"
+                                        Content="다음 ▶" MinWidth="86" Height="32" Click="OnNotesNext"/>
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>

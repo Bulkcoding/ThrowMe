@@ -1783,6 +1783,29 @@ public partial class SlimeWindow : Window
 
     /// <summary>수신 적용 중에는 되돌려 보내지 않도록 하는 표시(피드백 루프 방지).</summary>
     private bool _applyingRoomStyle;
+
+    /// <summary>
+    /// 지금 방에 적용된 겉모습 요약(참가자도 방장이 뭘 골랐는지 볼 수 있게).
+    /// 방장은 자기 설정에서, 참가자는 받은 값에서 만든다.
+    /// </summary>
+    public RoomStyleData? CurrentRoomStyle { get; private set; }
+
+    /// <summary>방 겉모습이 바뀌면 발생 — 설정창이 요약을 갱신한다.</summary>
+    public event Action? RoomStyleChanged;
+
+    /// <summary>지금 내 설정으로 요약을 만든다(방장용).</summary>
+    private RoomStyleData BuildStyleFromSettings() => new()
+    {
+        Skin = _settings.Skin.ToString(),
+        ThrowPower = _settings.ThrowPower,
+        Restitution = _settings.Restitution,
+        Softness = _settings.Softness,
+        SlimeSize = _settings.SlimeSize,
+        SkinImageEnabled = _settings.SkinImageEnabled,
+        SkinImageScale = _settings.SkinImageScale,
+        ImageSkin = SkinImageStore.Supports(_settings.Skin) && SkinImageStore.Has(_settings.Skin)
+            ? _settings.Skin.ToString() : null,
+    };
     private System.Windows.Threading.DispatcherTimer? _stylePushTimer;
     private readonly HashSet<string> _knownMembers = new(StringComparer.Ordinal);
 
@@ -1852,6 +1875,10 @@ public partial class SlimeWindow : Window
             Data = RelayJson.ToElement(data),
         });
         Logger.Info($"Room style pushed (skin={data.Skin}, image={(data.ImagePng != null ? "yes" : "no")}).");
+
+        // 요약은 이미지 본문 없이 보관(설정창 표시용).
+        CurrentRoomStyle = BuildStyleFromSettings();
+        RoomStyleChanged?.Invoke();
     }
 
     /// <summary>방장이 보낸 겉모습을 이 PC에 적용(참가자).</summary>
@@ -1886,9 +1913,26 @@ public partial class SlimeWindow : Window
             if (d.SkinImageScale > 0) _settings.SkinImageScale = d.SkinImageScale;
 
             Logger.Info($"Room style applied (skin={d.Skin}).");
+
+            // 참가자도 방장이 뭘 골랐는지 볼 수 있게 요약 보관(이미지 본문은 제외).
+            CurrentRoomStyle = new RoomStyleData
+            {
+                Skin = d.Skin,
+                ThrowPower = d.ThrowPower,
+                Restitution = d.Restitution,
+                Softness = d.Softness,
+                SlimeSize = d.SlimeSize,
+                SkinImageEnabled = d.SkinImageEnabled,
+                SkinImageScale = d.SkinImageScale,
+                ImageSkin = d.ImageSkin,
+            };
         }
         catch (Exception ex) { Logger.Error("Failed to apply room style.", ex); }
-        finally { _applyingRoomStyle = false; }
+        finally
+        {
+            _applyingRoomStyle = false;
+            RoomStyleChanged?.Invoke();
+        }
     }
 
     /// <summary>서버가 알려준 방 공통 테마를 이 PC에 적용.</summary>
@@ -3037,6 +3081,20 @@ public partial class SlimeWindow : Window
             catch (Exception ex) { Logger.Info($"Leave on shutdown skipped: {ex.GetType().Name}"); }
             relay.Dispose();
         }
+
+        // 멀티 PC 는 종료와 함께 꺼진다. 다음에 켜면 체크가 풀린 상태(방 밖)로 시작한다.
+        // 예전에는 방 정보가 그대로 남아 켜자마자 예전 방에 자동 재접속했고,
+        // 그래서 "끄고 다시 켰는데 이전 방으로 공이 넘어간다"는 문제가 있었다.
+        try
+        {
+            if (_auth.Enabled)
+            {
+                _auth.Enabled = false;
+                _auth.Save();
+                Logger.Info("Multi-PC disabled on shutdown (starts off next time).");
+            }
+        }
+        catch (Exception ex) { Logger.Error("Failed to disable multi-PC on shutdown.", ex); }
         if (_hwnd != IntPtr.Zero)
         {
             UnregisterHotKey(_hwnd, CatchHotkeyId);
