@@ -26,8 +26,11 @@
                            FontSize="17" Margin="10,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
 
-            <TextBlock x:Name="SubText" Style="{StaticResource RowDesc}" Margin="0,10,0,0"
-                       TextWrapping="Wrap" Text="새 버전을 준비하고 있습니다. 끝나면 자동으로 다시 시작합니다."/>
+            <!-- 한 줄에 몰아넣으면 창 폭에서 잘려서, 문장을 줄로 나눠 보여준다. -->
+            <TextBlock x:Name="SubText" Style="{StaticResource RowDesc}" Margin="0,12,0,0"
+                       TextWrapping="Wrap" Text="새 버전으로 업데이트하고 있습니다."/>
+            <TextBlock x:Name="SubText2" Style="{StaticResource RowDesc}" Margin="0,4,0,0"
+                       TextWrapping="Wrap" Text="끝나면 자동으로 다시 시작합니다."/>
 
             <ProgressBar x:Name="Bar" Height="6" Margin="0,16,0,0"
                          Minimum="0" Maximum="1" Value="0"

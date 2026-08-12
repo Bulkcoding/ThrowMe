@@ -13,7 +13,8 @@ public partial class UpdateProgressWindow : Window
     public UpdateProgressWindow(System.Version version)
     {
         InitializeComponent();
-        SubText.Text = $"v{Trim(version)} 로 업데이트하고 있습니다. 끝나면 자동으로 다시 시작합니다.";
+        SubText.Text = $"v{Trim(version)} 로 업데이트하고 있습니다.";
+        // 두 번째 줄("끝나면 자동으로 다시 시작합니다.")은 XAML 기본값 그대로 둔다.
     }
 
     /// <summary>다운로드 진행률(0~1) 반영.</summary>
@@ -39,7 +40,8 @@ public partial class UpdateProgressWindow : Window
         Bar.IsIndeterminate = true;
         PercentText.Text = "";
         TitleText.Text = "적용하는 중…";
-        SubText.Text = "잠시 후 자동으로 다시 시작합니다.";
+        SubText.Text = "새 버전으로 바꾸고 있습니다.";
+        SubText2.Text = "잠시 후 자동으로 다시 시작합니다.";
     }
 
     private static string Trim(System.Version v) =>
