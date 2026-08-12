@@ -48,6 +48,7 @@ public partial class SettingsWindow : Window
         _settings = settings;
         _slime = slime;
         InitializeComponent();
+        DwmChrome.AttachTo(this); // 둥근 모서리·그림자·테두리는 OS 가 그린다
         DataContext = settings;
         BuildThemeCards();
         UpdateRebindText();
@@ -96,24 +97,6 @@ public partial class SettingsWindow : Window
     private void OnTitleBarDrag(object sender, MouseButtonEventArgs e)
     {
         if (e.ButtonState == MouseButtonState.Pressed) DragMove();
-    }
-
-    /// <summary>본문 Border 의 둥근 모서리 반지름. XAML 의 CornerRadius 와 반드시 같아야 한다.</summary>
-    private const double RootCorner = 16;
-
-    /// <summary>
-    /// 창 외곽을 실제 픽셀 단위로 둥글게 자른다.
-    ///
-    /// Border 의 CornerRadius 는 '자기 배경'만 둥글게 칠하고, ClipToBounds 는 사각 bounds 로만 자른다.
-    /// 그래서 타이틀바 Grid·사이드바 Border 처럼 자기 Background 를 가진 자식이 모서리 밖으로
-    /// 사각형(삼각형처럼 보이는 조각)을 그려버린다. 둥근 RectangleGeometry 를 Clip 으로 씌우면
-    /// 이 Border 와 모든 자손이 같은 둥근 영역으로 잘려서 모서리가 깨끗해진다.
-    /// 크기가 바뀔 때마다(리사이즈·DPI 변경) 다시 만들어야 하므로 SizeChanged 에서 처리한다.
-    /// </summary>
-    private void OnRootSizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        RootBorder.Clip = new RectangleGeometry(
-            new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), RootCorner, RootCorner);
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Hide();

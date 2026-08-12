@@ -1,4 +1,5 @@
 using System.Windows;
+using ThrowMe.Services;
 
 namespace ThrowMe.Views;
 
@@ -13,6 +14,7 @@ public partial class UpdateProgressWindow : Window
     public UpdateProgressWindow(System.Version version)
     {
         InitializeComponent();
+        DwmChrome.AttachTo(this); // 설정창과 같은 둥근 모서리·그림자·테두리
         SubText.Text = $"v{Trim(version)} 로 업데이트하고 있습니다.";
         // 두 번째 줄("끝나면 자동으로 다시 시작합니다.")은 XAML 기본값 그대로 둔다.
     }
