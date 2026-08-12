@@ -19,6 +19,7 @@ public partial class ReleaseNotesWindow : Window
     public ReleaseNotesWindow(UpdateService.ReleaseNotes notes, AppSettings? settings = null)
     {
         InitializeComponent();
+        DwmChrome.AttachTo(this); // 설정창과 같은 둥근 모서리·그림자·테두리
         _settings = settings;
 
         VersionBadge.Text = "v" + (string.IsNullOrWhiteSpace(notes.Version) ? "?" : notes.Version);

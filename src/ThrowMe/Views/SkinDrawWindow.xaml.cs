@@ -54,6 +54,7 @@ public partial class SkinDrawWindow : Window
     {
         _kind = kind;
         InitializeComponent();
+        DwmChrome.AttachTo(this); // 설정창과 같은 둥근 모서리·그림자·테두리
 
         TitleText.Text = $"{themeName} — 공에 그리기";
         Checker.Fill = MakeCheckerBrush();

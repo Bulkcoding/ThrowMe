@@ -3,14 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="ThrowMe 업데이트"
         Width="460" SizeToContent="Height" MaxHeight="560"
-        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        ShowInTaskbar="False" Topmost="True" FontFamily="Pretendard, Malgun Gothic" Icon="/Resources/ThrowMe.ico">
+        WindowStyle="None" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        ShowInTaskbar="False" Topmost="True" FontFamily="Pretendard, Malgun Gothic" Icon="/Resources/ThrowMe.ico"
 
-    <Border CornerRadius="16" Background="{StaticResource WinBg}" ClipToBounds="True">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="28" ShadowDepth="6" Opacity="0.5" Color="#000000"/>
-        </Border.Effect>
+        AllowsTransparency="False" Background="{StaticResource WinBg}">
+    <!-- 설정창과 같은 외곽 처리(DwmChrome.AttachTo). AllowsTransparency 는 false 여야 한다. -->
 
         <Grid>
             <Grid.RowDefinitions>
@@ -67,5 +66,4 @@
                         HorizontalAlignment="Right" MinWidth="96"/>
             </Grid>
         </Grid>
-    </Border>
 </Window>
