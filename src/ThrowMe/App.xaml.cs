@@ -116,9 +116,11 @@ public partial class App : Application
 
         _tray = new TrayIconService(
             _settings,
-            openSettings: () => _slimeWindow?.OpenSettingsPublic(),
-            resetPosition: () => _slimeWindow?.ResetPositionPublic(),
-            exit: Shutdown);
+            // 트레이 콜백은 WinForms 스레드에서 실행되어 WPF 의 전역 예외 처리가 잡지 못한다.
+            // 여기서 감싸지 않으면 설정창 생성 중 오류가 그대로 ".NET 오류 대화상자"로 튀어나온다.
+            openSettings: () => SafeTrayAction(() => _slimeWindow?.OpenSettingsPublic(), "openSettings"),
+            resetPosition: () => SafeTrayAction(() => _slimeWindow?.ResetPositionPublic(), "resetPosition"),
+            exit: () => SafeTrayAction(Shutdown, "exit"));
 
         // 설정 변경 시 디바운스 자동 저장.
         _store.AttachAutoSave(_settings);
@@ -198,6 +200,13 @@ public partial class App : Application
         {
             Logger.Error("Release notes stash failed.", ex);
         }
+    }
+
+    /// <summary>트레이 메뉴 동작을 감싼다. 실패해도 앱이 죽거나 오류 대화상자가 뜨지 않게.</summary>
+    private static void SafeTrayAction(Action action, string name)
+    {
+        try { action(); }
+        catch (Exception ex) { Logger.Error($"Tray action '{name}' failed.", ex); }
     }
 
     /// <summary>

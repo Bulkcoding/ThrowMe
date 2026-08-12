@@ -678,6 +678,23 @@ public partial class SettingsWindow : Window
 
     private void RefreshPartyList()
     {
+        // 파티 목록을 그리다 실패해도 설정창 자체는 열려야 한다.
+        // (예전에 여기서 형 변환 예외가 나면서 생성자가 통째로 터져 설정창이 아예 안 열렸다.)
+        try { RefreshPartyListCore(); }
+        catch (Exception ex)
+        {
+            Logger.Error("RefreshPartyList failed; showing fallback.", ex);
+            try
+            {
+                PartyList?.Items.Clear();
+                if (PartyHint != null) PartyHint.Text = "파티원 목록을 표시하지 못했습니다.";
+            }
+            catch { /* 여기서 더 실패해도 창은 열어야 한다 */ }
+        }
+    }
+
+    private void RefreshPartyListCore()
+    {
         if (PartyList == null) return;
 
         var nodes = _slime.RoomNodes;

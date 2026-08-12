@@ -106,39 +106,18 @@ public static class UpdateService
         {
             using var http = CreateClient(token);
 
-            string api = $"https://api.github.com/repos/{UpdateConfig.Owner}/{UpdateConfig.Repo}/releases/latest";
-            string json = await http.GetStringAsync(api);
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            Version? latest = ParseTag(root.GetProperty("tag_name").GetString());
+            // 최신 버전 확인은 API 를 쓰지 않는다(IP 당 시간당 60회 한도 회피).
+            Version? latest = await FetchLatestTagAsync();
             if (latest == null || latest <= Current) return;
 
             // 이미 같은(또는 더 높은) 버전을 받아 뒀으면 재다운로드 생략
             if (File.Exists(PendingVer) && Version.TryParse(File.ReadAllText(PendingVer).Trim(), out var staged)
                 && Normalize(staged) >= latest) return;
 
-            string? apiUrl = null, browserUrl = null;
-            foreach (var a in root.GetProperty("assets").EnumerateArray())
-            {
-                string name = a.GetProperty("name").GetString() ?? "";
-                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                {
-                    apiUrl = a.GetProperty("url").GetString();                                  // asset API URL(인증 필요)
-                    browserUrl = a.TryGetProperty("browser_download_url", out var b) ? b.GetString() : null; // 공개 직링크
-                    break;
-                }
-            }
-
-            // 공개 저장소: 인증 없는 직링크(browser_download_url)로 받는다.
-            // 토큰이 있으면(비공개 대비) asset API URL + octet-stream 으로 받는다.
-            bool useApi = !string.IsNullOrEmpty(token) && apiUrl != null;
-            string? downloadUrl = useApi ? apiUrl : browserUrl;
-            if (downloadUrl == null) return;
-
+            // 자산 이름은 우리가 정하므로(ThrowMe.exe) 직링크를 만들어 받는다 — API 불필요.
+            string downloadUrl = DirectAssetUrl(latest);
             using var req = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
             req.Headers.Accept.Clear();
-            if (useApi) req.Headers.Accept.ParseAdd("application/octet-stream");
             using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
             resp.EnsureSuccessStatusCode();
 
@@ -166,15 +145,21 @@ public static class UpdateService
             File.Move(part, PendingExe);
             File.WriteAllText(PendingVer, latest.ToString());
 
-            // 릴리스 노트 저장. 건너뛴 중간 버전이 있으면 그 내용까지 모아 담는다.
-            await SavePendingNotesAsync(http, root, latest);
+            // 릴리스 노트는 API 가 필요하다. 한도에 걸려 실패해도 업데이트 자체는 이미 끝났으므로
+            // 여기서 막지 않는다(노트는 설정 탭에서 다시 받아올 수 있다).
+            try { await SavePendingNotesAsync(http, latest); }
+            catch (Exception ex) { Logger.Info($"Release notes not saved ({ex.GetType().Name}); update continues."); }
 
             // 받아 둔 즉시 알린다. 예전에는 여기서 끝내고 "다음 실행 때" 교체했기 때문에
             // 사용자가 앱을 두 번 켜야 새 버전이 됐다. 이제 이 시점에 바로 적용을 제안한다.
             try { UpdateStaged?.Invoke(latest); }
             catch (Exception ex) { Logger.Error("UpdateStaged handler threw.", ex); }
         }
-        catch { /* 네트워크/권한/파싱 문제는 조용히 무시(앱 사용에 지장 없음) */ }
+        catch (Exception ex)
+        {
+            // 조용히 넘기되 원인은 남긴다(예전엔 통째로 삼켜서 왜 업데이트가 안 되는지 알 수 없었다).
+            Logger.Error("Update check/stage failed.", ex);
+        }
     }
 
     /// <summary>
@@ -190,16 +175,74 @@ public static class UpdateService
     public static async Task<Version?> FindNewerVersionAsync()
     {
         if (!UpdateConfig.Enabled) return null;
+        Version? latest = await FetchLatestTagAsync();
+        return latest != null && latest > Current ? latest : null;
+    }
+
+    /// <summary>
+    /// 최신 릴리스 태그를 알아낸다.
+    ///
+    /// <b>API 를 쓰지 않는다.</b> 인증 없는 GitHub API 는 <b>IP 당 시간당 60회</b>라,
+    /// 한 사무실에서 여러 PC 가 같은 공인 IP 를 쓰면 금방 소진된다. 그러면 업데이트 확인이
+    /// 조용히 실패해 구버전에 머물게 된다(실제로 그런 일이 있었다).
+    ///
+    /// 대신 <c>/releases/latest</c> 웹 URL 이 최신 태그로 302 리다이렉트하는 것을 이용한다.
+    /// 이건 일반 웹 요청이라 API 한도와 무관하다. 실패하면 API 로 폴백한다.
+    /// </summary>
+    private static async Task<Version?> FetchLatestTagAsync()
+    {
+        // 1) 리다이렉트 방식(한도 없음)
+        try
+        {
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("ThrowMe-Updater");
+
+            string url = $"https://github.com/{UpdateConfig.Owner}/{UpdateConfig.Repo}/releases/latest";
+            using var resp = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+            string? location = resp.Headers.Location?.ToString();
+            if (!string.IsNullOrEmpty(location))
+            {
+                // .../releases/tag/v1.12.0
+                int i = location.LastIndexOf('/');
+                if (i >= 0 && i + 1 < location.Length)
+                {
+                    Version? v = ParseTag(location[(i + 1)..]);
+                    if (v != null) return v;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Info($"Latest-tag redirect lookup failed ({ex.GetType().Name}); falling back to API.");
+        }
+
+        // 2) API 폴백(한도에 걸릴 수 있음 — 걸리면 원인을 로그로 남긴다)
         try
         {
             using var http = CreateClient(Token);
             string api = $"https://api.github.com/repos/{UpdateConfig.Owner}/{UpdateConfig.Repo}/releases/latest";
-            using var doc = JsonDocument.Parse(await http.GetStringAsync(api));
-            Version? latest = ParseTag(doc.RootElement.GetProperty("tag_name").GetString());
-            return latest != null && latest > Current ? latest : null;
+            using var resp = await http.GetAsync(api);
+            if ((int)resp.StatusCode == 403 || (int)resp.StatusCode == 429)
+            {
+                Logger.Error($"GitHub API rate limit hit ({(int)resp.StatusCode}); update check skipped this time.");
+                return null;
+            }
+            resp.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            return ParseTag(doc.RootElement.GetProperty("tag_name").GetString());
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            Logger.Error("Failed to determine latest version.", ex);
+            return null;
+        }
     }
+
+    /// <summary>릴리스 자산 직링크. 자산 이름은 우리가 정하므로 API 없이 만들 수 있다.</summary>
+    private static string DirectAssetUrl(Version v) =>
+        $"https://github.com/{UpdateConfig.Owner}/{UpdateConfig.Repo}/releases/download/v{v.ToString(3)}/ThrowMe.exe";
 
     // ── 마지막 업데이트 노트(설정에서 열람) ─────────────────────
     private static string LastNotesPath => Path.Combine(StageDir, "last_notes.json");
@@ -320,7 +363,7 @@ public static class UpdateService
     /// 본문을 모아서 담는다. 예전에는 최신 릴리스 하나만 담아서 중간 버전의 변경 내용이
     /// 통째로 사라졌다.
     /// </summary>
-    private static async Task SavePendingNotesAsync(HttpClient http, JsonElement latestRoot, Version latest)
+    private static async Task SavePendingNotesAsync(HttpClient http, Version latest)
     {
         try
         {
@@ -343,11 +386,10 @@ public static class UpdateService
             }
             else
             {
-                // 목록 조회에 실패하면 최신 릴리스 하나만이라도 담는다(기존 동작).
-                title = latestRoot.TryGetProperty("name", out var n) ? (n.GetString() ?? "").Trim() : "";
-                body = latestRoot.TryGetProperty("body", out var b)
-                    ? (b.GetString() ?? "").Replace("\r\n", "\n").Trim()
-                    : "";
+                // 목록 조회 실패(API 한도 등) — 노트 없이 버전만 남긴다.
+                // 설정 → 업데이트 노트 에서 나중에 다시 받아올 수 있다.
+                title = $"v{latest.ToString(3)}";
+                body = "";
             }
 
             var notes = new ReleaseNotes
