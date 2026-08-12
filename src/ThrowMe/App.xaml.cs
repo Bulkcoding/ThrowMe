@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using Application = System.Windows.Application;
@@ -81,92 +81,80 @@ public partial class App : Application
         // 설정 변경 시 디바운스 자동 저장.
         _store.AttachAutoSave(_settings);
 
-        // 방금 업데이트가 적용됐다면 변경 내용을 한 번 보여준다.
-        ShowReleaseNotesIfJustUpdated();
+        // 방금 업데이트가 적용됐다면 노트를 설정에서 볼 수 있게 보관만 한다(팝업 없음).
+        StashAppliedNotes();
 
-        // 백그라운드로 최신 릴리스 확인 → 받아 두면 그 즉시 적용을 제안한다(아래 핸들러).
-        UpdateService.UpdateStaged += OnUpdateStaged;
-        _ = UpdateService.CheckAndStageAsync();
+        // 새 버전이 있으면 묻지 않고 진행바만 띄워 받고, 적용 후 자동 재시작.
+        _ = RunStartupUpdateAsync();
 
         Logger.Info("ThrowMe started.");
     }
 
     /// <summary>
-    /// 새 버전을 받아 둔 직후. 실행 중인 exe 는 스스로를 덮어쓸 수 없어 재시작이 꼭 필요하므로,
-    /// 지금 재시작할지 물어본다. (예전에는 그냥 다음 실행을 기다려서, 사용자가 앱을 두 번
-    /// 켜야 새 버전이 됐다.) 거절하면 다음 실행 때 조용히 적용된다.
+    /// 시작 시 업데이트 처리. 새 버전이 있으면 <b>묻지 않고</b> 진행 창만 띄워 내려받고,
+    /// 교체 후 자동으로 다시 시작한다. 무엇이 달라졌는지는 설정에서 확인한다.
+    /// 업데이트가 없으면 아무것도 표시하지 않는다(창을 만들지도 않음).
     /// </summary>
-    private void OnUpdateStaged(Version version)
+    private async Task RunStartupUpdateAsync()
     {
-        Dispatcher.InvokeAsync(() =>
+        UpdateProgressWindow? win = null;
+        try
         {
-            try
+            var latest = await UpdateService.FindNewerVersionAsync();
+            if (latest == null) return; // 최신이거나 확인 실패 → 조용히 통과
+
+            Logger.Info($"Update available: v{latest}. Downloading…");
+            win = new UpdateProgressWindow(latest);
+            win.Show();
+
+            var progress = new Progress<double>(p => win?.SetProgress(p));
+            await UpdateService.CheckAndStageAsync(progress);
+
+            if (!UpdateService.HasStagedUpdate)
             {
-                if (_settings is { AutoRestartOnUpdate: false }) return; // 사용자가 꺼 둠
-
-                var prompt = new UpdatePromptWindow(version, _settings);
-                prompt.ShowDialog();
-                if (!prompt.RestartNow) return;
-
-                // 확인창에서 이미 노트를 봤으면 교체 후 같은 내용이 또 뜨지 않게 한다.
-                prompt.MarkNotesSeenIfShown();
-
-                if (UpdateService.TryApplyStagedUpdate())
-                {
-                    Logger.Info($"Applying staged update v{version} on user request; restarting.");
-                    Shutdown(); // 교체 스크립트가 종료를 기다렸다가 새 버전으로 다시 실행한다
-                }
-                else
-                {
-                    Logger.Error("Staged update could not be applied (write permission?).");
-                    MessageBox.Show(
-                        "업데이트를 적용하지 못했습니다. 설치 위치에 쓰기 권한이 있는지 확인해 주세요.",
-                        "ThrowMe", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+                Logger.Error("Update download did not produce a staged file.");
+                win.Close();
+                return;
             }
-            catch (Exception ex)
+
+            win.SetApplying();
+            await Task.Delay(400); // 진행 창이 '적용 중'으로 바뀐 걸 보여 줄 최소 시간
+
+            if (UpdateService.TryApplyStagedUpdate())
             {
-                Logger.Error("Failed to prompt/apply staged update.", ex);
+                Logger.Info($"Applying update v{latest}; restarting.");
+                Shutdown(); // 교체 스크립트가 종료를 기다렸다가 새 버전으로 다시 실행한다
             }
-        });
+            else
+            {
+                Logger.Error("Staged update could not be applied (write permission?).");
+                win.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Startup update failed.", ex);
+            try { win?.Close(); } catch { /* 무시 */ }
+        }
     }
 
+
     /// <summary>
-    /// 업데이트 직후라면 릴리스 노트 팝업을 띄운다.
-    /// 노트는 1회성이라, 설정으로 꺼 둔 경우에도 소비(삭제)해서 다음 업데이트 때 옛 노트가 뜨지 않게 한다.
+    /// 방금 업데이트가 적용됐다면 노트를 "마지막 업데이트 노트"로 보관한다.
+    /// 팝업은 띄우지 않는다 — 설정 → 일반 → "최근 변경 내용 보기" 에서 언제든 볼 수 있다.
     /// </summary>
-    private void ShowReleaseNotesIfJustUpdated()
+    private void StashAppliedNotes()
     {
         try
         {
             var notes = UpdateService.TryConsumeAppliedNotes();
             if (notes == null) return;
-
-            Logger.Info($"Updated to v{notes.Version}.");
-            if (_settings is { ShowReleaseNotes: false }) return;
-
-            // 슬라임 창이 자리를 잡은 뒤 뜨도록 살짝 미룬다(시작을 막지 않음).
-            //
-            // [주의] 예전에는 DispatcherPriority.ApplicationIdle 로 예약했는데, 물리 렌더 루프
-            // (CompositionTarget.Rendering)가 도는 동안에는 dispatcher 가 idle 이 되지 않아
-            // 콜백이 실행되지 않았다. 공이 정지해 있을 때만 팝업이 뜨고, 정작 업데이트 직후
-            // 릴레이로 공을 받아 루프가 돌면 영영 안 떴다.
-            // 타이머는 idle 여부와 무관하게 발화하므로 확실하다.
-            var timer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(800),
-            };
-            timer.Tick += (_, _) =>
-            {
-                timer.Stop();
-                try { new ReleaseNotesWindow(notes, _settings).Show(); }
-                catch (Exception ex) { Logger.Error("Failed to show release notes.", ex); }
-            };
-            timer.Start();
+            UpdateService.SaveLastNotes(notes);
+            Logger.Info($"Updated to v{notes.Version}. (notes available in settings)");
         }
         catch (Exception ex)
         {
-            Logger.Error("Release notes check failed.", ex);
+            Logger.Error("Release notes stash failed.", ex);
         }
     }
 

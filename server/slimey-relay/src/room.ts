@@ -233,7 +233,13 @@ export class RoomDurableObject extends DurableObject<Env> {
     if (!data || !to) return;
 
     // 권위 검증: 현재 owner 만 넘길 수 있다(공 주입/복제 방지).
+    // ERROR 만 보내면 보낸 쪽은 HANDOFF_RESULT 를 기다리다 공을 잃어버린 채로 남는다
+    // (공을 숨기고 물리를 멈춘 상태라 앱을 다시 켜야 했다). 반드시 결과도 함께 돌려준다.
     if (this.owner !== from) {
+      this.sendToNode(from, {
+        v: PROTOCOL_VERSION, type: "HANDOFF_RESULT",
+        data: { handoffId: data.handoffId, accepted: false, reason: ErrorCodes.NOT_OWNER },
+      });
       return this.sendToNode(from, {
         v: PROTOCOL_VERSION, type: "ERROR",
         data: { code: ErrorCodes.NOT_OWNER, message: "not current ball owner" },

@@ -93,7 +93,11 @@ public static class UpdateService
     }
 
     /// <summary>백그라운드에서 최신 릴리스 확인 → 더 높으면 staging 에 exe 다운로드(다음 실행 때 적용).</summary>
-    public static async Task CheckAndStageAsync()
+    /// <param name="progress">
+    /// 0~1 진행률(다운로드 기준). 시작 시 0, 완료 시 1 을 보낸다.
+    /// 길이를 모르는 응답이면 중간값 없이 0 → 1 만 온다(진행바는 불확정 모드로 표시).
+    /// </param>
+    public static async Task CheckAndStageAsync(IProgress<double>? progress = null)
     {
         if (!UpdateConfig.Enabled) return;
         string? token = Token; // 공개 저장소면 토큰 없이 동작. 토큰이 있으면(비공개 대비) 인증에 사용.
@@ -140,8 +144,23 @@ public static class UpdateService
 
             Directory.CreateDirectory(StageDir);
             string part = PendingExe + ".part";
+            progress?.Report(0);
+
+            long? total = resp.Content.Headers.ContentLength;
+            await using (var src = await resp.Content.ReadAsStreamAsync())
             await using (var fs = File.Create(part))
-                await resp.Content.CopyToAsync(fs);
+            {
+                var buffer = new byte[81920];
+                long read = 0;
+                int n;
+                while ((n = await src.ReadAsync(buffer)) > 0)
+                {
+                    await fs.WriteAsync(buffer.AsMemory(0, n));
+                    read += n;
+                    if (total is > 0) progress?.Report(Math.Min(1.0, (double)read / total.Value));
+                }
+            }
+            progress?.Report(1);
 
             if (File.Exists(PendingExe)) File.Delete(PendingExe);
             File.Move(part, PendingExe);
@@ -163,6 +182,49 @@ public static class UpdateService
     /// 구독자는 UI 스레드로 마샬링해야 한다.
     /// </summary>
     public static event Action<Version>? UpdateStaged;
+
+    /// <summary>
+    /// 현재보다 높은 릴리스가 있으면 그 버전, 없거나 확인 실패면 null.
+    /// 시작 시 "진행 창을 띄울지" 판단하려고 다운로드 전에 먼저 물어본다.
+    /// </summary>
+    public static async Task<Version?> FindNewerVersionAsync()
+    {
+        if (!UpdateConfig.Enabled) return null;
+        try
+        {
+            using var http = CreateClient(Token);
+            string api = $"https://api.github.com/repos/{UpdateConfig.Owner}/{UpdateConfig.Repo}/releases/latest";
+            using var doc = JsonDocument.Parse(await http.GetStringAsync(api));
+            Version? latest = ParseTag(doc.RootElement.GetProperty("tag_name").GetString());
+            return latest != null && latest > Current ? latest : null;
+        }
+        catch { return null; }
+    }
+
+    // ── 마지막 업데이트 노트(설정에서 열람) ─────────────────────
+    private static string LastNotesPath => Path.Combine(StageDir, "last_notes.json");
+
+    /// <summary>적용된 노트를 보관한다(팝업 대신 설정에서 보여주기 위함).</summary>
+    public static void SaveLastNotes(ReleaseNotes notes)
+    {
+        try
+        {
+            Directory.CreateDirectory(StageDir);
+            File.WriteAllText(LastNotesPath, JsonSerializer.Serialize(notes));
+        }
+        catch (Exception ex) { Logger.Error("Failed to save last notes.", ex); }
+    }
+
+    /// <summary>보관된 마지막 업데이트 노트(없으면 null).</summary>
+    public static ReleaseNotes? LoadLastNotes()
+    {
+        try
+        {
+            if (!File.Exists(LastNotesPath)) return null;
+            return JsonSerializer.Deserialize<ReleaseNotes>(File.ReadAllText(LastNotesPath));
+        }
+        catch { return null; }
+    }
 
     /// <summary>받아 둔 업데이트가 있는가(재시작하면 바로 적용 가능한 상태).</summary>
     public static bool HasStagedUpdate =>

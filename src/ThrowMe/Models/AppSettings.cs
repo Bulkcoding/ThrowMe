@@ -223,9 +223,9 @@ public sealed class AppSettings : INotifyPropertyChanged
     private bool _slimeVisible = true;
     public bool SlimeVisible { get => _slimeVisible; set => Set(ref _slimeVisible, value); }
 
-    /// <summary>업데이트가 적용된 뒤 변경 내용(릴리스 노트) 팝업을 띄울지.</summary>
-    private bool _showReleaseNotes = true;
-    public bool ShowReleaseNotes { get => _showReleaseNotes; set => Set(ref _showReleaseNotes, value); }
+    // (제거됨) ShowReleaseNotes / AutoRestartOnUpdate
+    //   업데이트는 이제 묻지 않는다 — 켤 때 새 버전이 있으면 진행바만 띄우고 적용 후 자동 재시작.
+    //   변경 내용은 설정 → 일반 → "최근 변경 내용 보기" 로 언제든 확인한다.
 
     /// <summary>작업표시줄에 ThrowMe 를 표시할지(Alt+Tab 에도 함께 나온다).</summary>
     private bool _showInTaskbar = true;
@@ -246,13 +246,6 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     /// <summary>날아가는 중 클릭으로 방향을 바꿀 때, 이 속도(px/s) 이상이면 "되치기"로 본다.</summary>
     public double DeflectMinSpeed { get; set; } = 150.0;
-
-    /// <summary>
-    /// 새 버전을 받으면 그 자리에서 "지금 재시작할까요?" 를 물을지.
-    /// 끄면 묻지 않고 다음 실행 때 조용히 적용된다(= 앱을 두 번 켜야 새 버전).
-    /// </summary>
-    private bool _autoRestartOnUpdate = true;
-    public bool AutoRestartOnUpdate { get => _autoRestartOnUpdate; set => Set(ref _autoRestartOnUpdate, value); }
 
     /// <summary>표시할 스킨(젤리/당구공 등).</summary>
     private SlimeSkinKind _skin = SlimeSkinKind.Jelly;

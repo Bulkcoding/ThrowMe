@@ -1,6 +1,7 @@
 using System.Linq;
 using ThrowMe.Models;
 using ThrowMe.Physics;
+using ThrowMe.Services;
 
 namespace ThrowMe.Network;
 
@@ -23,6 +24,7 @@ public sealed class BallHandoffCoordinator
     private string? _pendingOutId;
     private Edge _pendingExitEdge;
     private Vector2 _savedVelocity;
+    private double _pendingSince;   // 넘기기 시작한 시각(초) — 응답 없을 때의 안전망용
     private int _seq;
 
     public string SelfNodeId { get; set; } = "";
@@ -56,7 +58,7 @@ public sealed class BallHandoffCoordinator
     /// 물리 tick 뒤 호출. 공이 연결된 엣지를 넘었으면 핸드오프를 보내고 물리를 얼린 뒤 true.
     /// (SlimeWindow 는 true 면 공을 숨기고 유휴로 전환. 결과는 <see cref="OnResult"/> 로.)
     /// </summary>
-    public bool CheckAndSendHandoff()
+    public bool CheckAndSendHandoff(double nowSeconds = 0)
     {
         if (_pendingOutId != null) return false;
 
@@ -85,9 +87,12 @@ public sealed class BallHandoffCoordinator
             Data = RelayJson.ToElement(data),
         });
 
+        Logger.Info($"Handoff sent {SelfNodeId} -> {link.To} via {via}");
+
         // ACK 전까지 롤백 대비 상태 저장 후 물리 정지(공이 다른 PC에 가 있는 동안).
         _pendingOutId = id;
         _pendingExitEdge = exit;
+        _pendingSince = nowSeconds;
         _savedVelocity = _physics.Velocity;
         _physics.Velocity = Vector2.Zero;
         _physics.AngularVelocity = 0;
@@ -104,14 +109,71 @@ public sealed class BallHandoffCoordinator
         _pendingOutId = null;
 
         if (r.Accepted) return ResultKind.Released;
+        return ReflectPending("server said: " + (r.Reason ?? "rejected"));
+    }
 
-        // 실패(오프라인/타임아웃/거부): 저장한 나가던 속도를 안쪽으로 반사해 되돌린다.
+    /// <summary>
+    /// 넘기는 중에 서버가 <b>HANDOFF_RESULT 가 아닌 ERROR</b>(예: NOT_OWNER)로 답한 경우.
+    /// 이때 결과 메시지는 영영 오지 않으므로, 여기서 회수하지 않으면 공이 사라진 채로 남는다
+    /// (앱을 다시 켜야 했던 원인).
+    /// </summary>
+    public ResultKind OnRejected(string reason)
+    {
+        if (_pendingOutId == null) return ResultKind.Ignored;
+        _pendingOutId = null;
+        return ReflectPending(reason);
+    }
+
+    /// <summary>
+    /// 응답이 아예 오지 않는 경우(메시지 유실·서버 이상)의 안전망. 매 프레임 호출.
+    /// 서버 ACK 타임아웃(1.5s)보다 넉넉히 잡아 정상 왕복을 방해하지 않는다.
+    /// </summary>
+    public ResultKind CheckPendingTimeout(double nowSeconds)
+    {
+        if (_pendingOutId == null) return ResultKind.Ignored;
+        if (nowSeconds - _pendingSince < PendingTimeoutSeconds) return ResultKind.Ignored;
+        _pendingOutId = null;
+        return ReflectPending("no response (timeout)");
+    }
+
+    private const double PendingTimeoutSeconds = 5.0;
+
+    /// <summary>넘기려던 공을 다시 화면 안으로 반사시켜 회수한다.</summary>
+    private ResultKind ReflectPending(string reason)
+    {
         Vector2 n = HandoffMath.OutwardNormal(_pendingExitEdge);
         double vn = _savedVelocity.X * n.X + _savedVelocity.Y * n.Y;
         _physics.Velocity = _savedVelocity - n * ((1 + _settings.Restitution) * vn);
-        _physics.SetPositionClamped(_physics.Position); // 화면 안으로 클램프
+
+        // 경계 밖(넘어가던 좌표)일 수 있으므로 반드시 유효한 자리로 되돌린다.
+        // 단순 클램프는 작업표시줄·모니터 사이 빈 공간에 놓일 수 있어 갇힌다.
+        _physics.SetPositionClamped(_physics.Position);
+        if (!_physics.IsCurrentPositionValid())
+        {
+            double size = _settings.SlimeSize;
+            Bounds b = _bounds();
+            Vector2 inward = n * -1.0;
+            Vector2 pushed = _physics.Position + inward * size;
+            if (HandoffMath.TryFindValidEntry(
+                    pushed, OppositeEdge(_pendingExitEdge), b, size,
+                    (x, y, sz) => _area.Strict.IsRectValid(new System.Windows.Rect(x, y, sz, sz)),
+                    out Vector2 safe))
+            {
+                _physics.Position = safe;
+            }
+        }
+
+        Logger.Info($"Handoff recovered ({reason}) — ball returned.");
         return ResultKind.Reflected;
     }
+
+    private static Edge OppositeEdge(Edge e) => e switch
+    {
+        Edge.Left => Edge.Right,
+        Edge.Right => Edge.Left,
+        Edge.Top => Edge.Bottom,
+        _ => Edge.Top,
+    };
 
     /// <summary>받은 HANDOFF 를 물리 엔진에 주입하고 ACK 를 보낸다. 성공 시 true(공 표시).</summary>
     public bool ApplyIncoming(Envelope env)

@@ -29,23 +29,9 @@ public partial class ReleaseNotesWindow : Window
 
         NotesRenderer.Render(NotesPanel, notes.Body, this);
 
-        // 토글 초기값 + 변경 시 설정 반영(설정이 주어진 경우에만).
-        if (_settings != null)
-        {
-            MuteToggle.IsChecked = !_settings.ShowReleaseNotes;
-            MuteToggle.Checked += OnMuteChanged;
-            MuteToggle.Unchecked += OnMuteChanged;
-        }
-        else
-        {
-            MuteToggle.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    private void OnMuteChanged(object sender, RoutedEventArgs e)
-    {
-        if (_settings != null)
-            _settings.ShowReleaseNotes = MuteToggle.IsChecked != true;
+        // 이 창은 이제 설정에서 직접 열 때만 뜬다(업데이트 직후 자동 팝업 없음).
+        // 따라서 "다음부터 알리지 않기" 는 의미가 없어 감춘다.
+        MuteRow.Visibility = Visibility.Collapsed;
     }
 
     private void OnTitleBarDrag(object sender, MouseButtonEventArgs e)

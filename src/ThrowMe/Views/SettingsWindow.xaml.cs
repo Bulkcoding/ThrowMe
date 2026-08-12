@@ -58,6 +58,11 @@ public partial class SettingsWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
         PreviewMouseDown += OnPreviewMouseDownCapture;
 
+        // 업데이트 안내에 현재 버전 표시(팝업을 없앤 대신 여기서 확인).
+        UpdateInfoText.Text =
+            $"현재 v{UpdateService.Current.ToString(3)} · 앱을 켤 때 새 버전이 있으면 " +
+            "자동으로 받아 적용하고 다시 시작합니다.";
+
         _slime.RelayStateChanged += st => Dispatcher.Invoke(() => UpdateNetStatus(st));
         // 방 멤버·순서·방장이 바뀌면 파티 목록을 다시 그린다.
         _slime.RoomStateChanged += OnRoomStateChanged;
@@ -118,7 +123,9 @@ public partial class SettingsWindow : Window
 
         try
         {
-            var notes = await UpdateService.FetchLatestNotesAsync();
+            // 업데이트 직후 보관해 둔 노트가 있으면 그걸 먼저 보여준다(방금 뭐가 바뀌었는지).
+            // 없으면 최신 릴리스를 조회한다. 팝업을 없앤 대신 여기서 언제든 확인할 수 있다.
+            var notes = UpdateService.LoadLastNotes() ?? await UpdateService.FetchLatestNotesAsync();
             if (notes == null)
             {
                 MessageBox.Show(this, "릴리스 정보를 가져오지 못했습니다. 네트워크 상태를 확인해 주세요.",

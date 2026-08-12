@@ -58,7 +58,7 @@
 
             <!-- 하단 -->
             <Grid Grid.Row="3" Margin="24,18,24,20">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <StackPanel x:Name="MuteRow" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
                     <CheckBox x:Name="MuteToggle" Style="{StaticResource Toggle}" VerticalAlignment="Center"/>
                     <TextBlock Text="다음부터 알리지 않기" Style="{StaticResource RowDesc}"
                                Margin="10,0,0,0" VerticalAlignment="Center"/>

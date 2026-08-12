@@ -896,7 +896,7 @@ public partial class SlimeWindow : Window
         CheckScoring();
         if (BowlingOn) UpdateBallLane(_settings.SlimeSize * 0.42); // 볼링: 파울선·거터 규칙
         // 네트워크: 공이 연결된 엣지를 넘었으면 다른 PC로 핸드오프(넘기고 공을 숨김).
-        if (_networked && _connected && _ownsBall && _coord!.CheckAndSendHandoff())
+        if (_networked && _connected && _ownsBall && _coord!.CheckAndSendHandoff(now))
         {
             HideBallForHandoff();
             return;
@@ -1772,13 +1772,23 @@ public partial class SlimeWindow : Window
         _roomNodes = nodes;
         ApplyRoomTheme(theme);
 
-        // 방장은 "순서 = 배치"를 보장한다. 새 멤버가 들어와 순서가 늘어나면 링크도 따라 갱신.
-        if (IsHost && _roomOrder.Count > 1)
+        // 방장은 "순서 = 배치"를 보장한다.
+        // 배치는 반드시 **지금 접속해 있는 노드만**으로 만든다. 서버의 order 는 나간 사람도
+        // 계속 남기 때문에, 그대로 쓰면 접속하지도 않은 PC 로 향하는 링크가 생기고
+        // 그 방향으로 던진 공이 갈 곳이 없어진다(공이 사라진 것처럼 보였던 원인 중 하나).
+        if (IsHost)
         {
-            var want = PartyLayout.BuildChainLinks(_roomOrder);
+            var online = new HashSet<string>(nodes.Select(n => n.NodeId), StringComparer.Ordinal);
+            var chain = _roomOrder.Where(online.Contains).ToList();
+            foreach (var id in online) if (!chain.Contains(id)) chain.Add(id);
+
+            var want = PartyLayout.BuildChainLinks(chain);
             if (!PartyLayout.SameLinks(want, _auth.Links))
                 PushRoomConfig(want);
         }
+
+        Logger.Info($"Room state: host={host} owner-sync order=[{string.Join(",", _roomOrder)}] " +
+                    $"online=[{string.Join(",", nodes.Select(n => n.NodeId))}]");
 
         RoomStateChanged?.Invoke();
     }
@@ -1860,7 +1870,16 @@ public partial class SlimeWindow : Window
     /// </summary>
     private void MergeLinksOnJoin(List<EdgeLinkDto> serverLinks)
     {
-        var merged = LinkMerge.Merge(_selfNodeId, _auth.Links, serverLinks);
+        // 로컬에 캐시된 링크에는 **다른 방/예전 세션의 상대**가 남아 있을 수 있다.
+        // 그대로 병합해 올리면 이 방에 있지도 않은 PC 로 향하는 링크가 생기고,
+        // 그쪽으로 던진 공은 갈 곳이 없어진다. 방에 실제로 있는 노드만 남긴다.
+        var known = new HashSet<string>(_roomNodes.Select(n => n.NodeId), StringComparer.Ordinal);
+        known.Add(_selfNodeId);
+        foreach (var l in serverLinks) { known.Add(l.From); known.Add(l.To); }
+
+        var localUsable = _auth.Links.Where(l => known.Contains(l.From) && known.Contains(l.To)).ToList();
+
+        var merged = LinkMerge.Merge(_selfNodeId, localUsable, serverLinks);
         _auth.Links = merged;
         _coord?.SetLinks(merged);
 
@@ -1951,14 +1970,16 @@ public partial class SlimeWindow : Window
             case MsgType.HandoffResult:
                 if (env.DataAs<HandoffResultData>() is { } res && _coord != null)
                 {
+                    _handoffWatchdog?.Stop(); // 결과가 왔으니 안전망 해제
                     switch (_coord.OnResult(res))
                     {
                         case BallHandoffCoordinator.ResultKind.Released:
                             LoseBall();                       // 상대가 받음 → 공 해제
                             break;
                         case BallHandoffCoordinator.ResultKind.Reflected:
+                            _ownsBall = true;                 // 실패 → 내가 계속 소유
                             ShowBall();
-                            EnsureRendering();                // 실패 → 반사로 회수, 계속 표시
+                            EnsureRendering();                // 반사로 회수, 계속 표시
                             break;
                     }
                 }
@@ -1966,7 +1987,22 @@ public partial class SlimeWindow : Window
 
             case MsgType.Error:
                 if (env.DataAs<ErrorData>() is { } err)
+                {
                     Logger.Info($"Relay error: {err.Code} {err.Message}");
+
+                    // 넘기는 중에 ERROR 가 오면 HANDOFF_RESULT 는 영영 오지 않는다.
+                    // (예: 서버가 소유자로 인정하지 않아 NOT_OWNER) 여기서 회수하지 않으면
+                    // 공이 사라진 채로 남아 앱을 다시 켜야 했다.
+                    if (_coord != null && _coord.HasPendingOut
+                        && _coord.OnRejected(err.Code) == BallHandoffCoordinator.ResultKind.Reflected)
+                    {
+                        _handoffWatchdog?.Stop();
+                        _ownsBall = true;
+                        ShowBall();
+                        ApplyWindowPosition();
+                        EnsureRendering();
+                    }
+                }
                 break;
         }
     }
@@ -2778,6 +2814,46 @@ public partial class SlimeWindow : Window
     {
         Hide();
         StopRendering();
+        StartHandoffWatchdog();
+    }
+
+    // 넘기는 동안에는 렌더 루프를 멈추므로(유휴), 프레임 기반으로는 응답 없음을 감지할 수 없다.
+    // 결과 메시지가 유실되거나 서버가 ERROR 로만 답하는 경우를 대비한 타이머 안전망.
+    private System.Windows.Threading.DispatcherTimer? _handoffWatchdog;
+
+    private void StartHandoffWatchdog()
+    {
+        _handoffWatchdog ??= new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(6),
+        };
+        _handoffWatchdog.Tick -= OnHandoffWatchdogTick;
+        _handoffWatchdog.Tick += OnHandoffWatchdogTick;
+        _handoffWatchdog.Stop();
+        _handoffWatchdog.Start();
+    }
+
+    private void OnHandoffWatchdogTick(object? sender, EventArgs e)
+    {
+        _handoffWatchdog?.Stop();
+        if (_shuttingDown || _coord == null || !_coord.HasPendingOut) return;
+
+        // 아직도 결과가 안 왔다 → 공을 잃어버린 상태. 회수해서 계속 쓸 수 있게 한다.
+        if (_coord.CheckPendingTimeout(Now) == BallHandoffCoordinator.ResultKind.Reflected)
+        {
+            Logger.Info("Handoff watchdog fired — ball recovered locally.");
+            _ownsBall = true;
+            ShowBall();
+            ApplyWindowPosition();
+            EnsureRendering();
+        }
+    }
+
+    private void StopHandoffWatchdog()
+    {
+        if (_handoffWatchdog == null) return;
+        _handoffWatchdog.Stop();
+        _handoffWatchdog.Tick -= OnHandoffWatchdogTick;
     }
 
     // ── 정리 ────────────────────────────────────────────────

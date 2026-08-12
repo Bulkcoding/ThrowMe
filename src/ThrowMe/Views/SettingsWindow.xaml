@@ -188,22 +188,9 @@
                             </StackPanel>
 
                             <TextBlock Text="업데이트" Style="{StaticResource Section}"/>
-                            <Grid Margin="0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                    <TextBlock Text="변경 내용 알리기" Style="{StaticResource RowLabel}"/>
-                                    <TextBlock Text="업데이트가 적용되면 무엇이 달라졌는지 팝업으로 보여줍니다." Style="{StaticResource RowDesc}"/>
-                                </StackPanel>
-                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowReleaseNotes}"/>
-                            </Grid>
-
-                            <Grid Margin="0,10,0,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                    <TextBlock Text="새 버전 받으면 바로 물어보기" Style="{StaticResource RowLabel}"/>
-                                    <TextBlock Text="끄면 앱을 다시 켤 때 조용히 적용됩니다(그만큼 늦게 반영)." Style="{StaticResource RowDesc}"/>
-                                </StackPanel>
-                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding AutoRestartOnUpdate}"/>
-                            </Grid>
+                            <TextBlock x:Name="UpdateInfoText" Style="{StaticResource RowDesc}" Margin="0,6,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="앱을 켤 때 새 버전이 있으면 자동으로 받아 적용하고 다시 시작합니다."/>
 
                             <StackPanel Orientation="Horizontal" Margin="0,18,0,6">
                                 <Button Style="{StaticResource GhostButton}" Content="위치 초기화"
