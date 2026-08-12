@@ -1171,6 +1171,9 @@ public partial class SlimeWindow : Window
         MenuBowlingStart.Visibility = bowl && !BowlingOn ? Visibility.Visible : Visibility.Collapsed;
         MenuBowlingReset.Visibility = bowl && BowlingOn ? Visibility.Visible : Visibility.Collapsed;
         MenuBowlingExit.Visibility = bowl && BowlingOn ? Visibility.Visible : Visibility.Collapsed;
+
+        // 현재 버전(안내용). 설정 → 업데이트 노트에서 무엇이 바뀌었는지 볼 수 있다.
+        MenuVersion.Header = $"ThrowMe v{UpdateService.Current.ToString(3)}";
     }
 
     private void On4Ball(object sender, RoutedEventArgs e) => SpawnBalls(2, 1);

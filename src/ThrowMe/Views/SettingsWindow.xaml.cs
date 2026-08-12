@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -58,7 +58,7 @@ public partial class SettingsWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
         PreviewMouseDown += OnPreviewMouseDownCapture;
 
-        // 업데이트 안내에 현재 버전 표시(팝업을 없앤 대신 여기서 확인).
+        // 업데이트 안내에 현재 버전 표시(버전별 내용은 '업데이트 노트' 탭에서).
         UpdateInfoText.Text =
             $"현재 v{UpdateService.Current.ToString(3)} · 앱을 켤 때 새 버전이 있으면 " +
             "자동으로 받아 적용하고 다시 시작합니다.";
@@ -109,40 +109,123 @@ public partial class SettingsWindow : Window
         PanelSound.Visibility = i == 2 ? Visibility.Visible : Visibility.Collapsed;
         PanelShortcuts.Visibility = i == 3 ? Visibility.Visible : Visibility.Collapsed;
         PanelNetwork.Visibility = i == 4 ? Visibility.Visible : Visibility.Collapsed;
+        PanelUpdateNotes.Visibility = i == 5 ? Visibility.Visible : Visibility.Collapsed;
         if (i == 4) RefreshNetworkPanel();
+        if (i == 5) _ = LoadReleaseNotesAsync(force: false);
+    }
+
+    // ── 업데이트 노트 탭 ────────────────────────────────────
+    private bool _notesLoaded;
+    private bool _notesLoading;
+
+    private void OnRefreshNotes(object sender, RoutedEventArgs e) => _ = LoadReleaseNotesAsync(force: true);
+
+    /// <summary>릴리스 목록을 받아 버전별로 펼쳐 보여준다. 한 번 받아 두면 다시 받지 않는다.</summary>
+    private async Task LoadReleaseNotesAsync(bool force)
+    {
+        if (_notesLoading) return;
+        if (_notesLoaded && !force) return;
+
+        _notesLoading = true;
+        NotesRefreshBtn.IsEnabled = false;
+        NotesStatusText.Text = "불러오는 중…";
+
+        try
+        {
+            var releases = await UpdateService.FetchAllReleasesAsync();
+            NotesList.Items.Clear();
+
+            if (releases.Count == 0)
+            {
+                NotesStatusText.Text = "릴리스 정보를 가져오지 못했습니다. 네트워크를 확인해 주세요.";
+                return;
+            }
+
+            string cur = UpdateService.Current.ToString(3);
+            foreach (var r in releases)
+                NotesList.Items.Add(BuildReleaseCard(r, isCurrent: r.Version == cur));
+
+            _notesLoaded = true;
+            NotesStatusText.Text = $"{releases.Count}개 버전";
+            NotesHeaderText.Text = $"현재 v{cur} · 버전별로 무엇이 바뀌었는지 볼 수 있습니다.";
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Failed to load release notes list.", ex);
+            NotesStatusText.Text = "불러오지 못했습니다.";
+        }
+        finally
+        {
+            _notesLoading = false;
+            NotesRefreshBtn.IsEnabled = true;
+        }
+    }
+
+    /// <summary>릴리스 한 건 = 버전 배지 + 제목 + 본문(마크다운 최소 서식).</summary>
+    private Border BuildReleaseCard(UpdateService.ReleaseNotes r, bool isCurrent)
+    {
+        var stack = new StackPanel();
+
+        var head = new StackPanel { Orientation = Orientation.Horizontal };
+        head.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            Background = (Brush)FindResource(isCurrent ? "Accent" : "TrackBg"),
+            Padding = new Thickness(9, 3, 9, 3),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = "v" + r.Version,
+                Foreground = isCurrent ? Brushes.White : (Brush)FindResource("TextBrush"),
+                FontSize = 11.5,
+                FontWeight = FontWeights.Bold,
+            },
+        });
+        if (isCurrent)
+        {
+            head.Children.Add(new TextBlock
+            {
+                Text = "사용 중",
+                Foreground = (Brush)FindResource("Accent"),
+                FontSize = 11.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+            });
+        }
+        stack.Children.Add(head);
+
+        if (!string.IsNullOrWhiteSpace(r.Title) && r.Title != "v" + r.Version)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = r.Title,
+                Foreground = (Brush)FindResource("TextBrush"),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 14,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0),
+            });
+        }
+
+        // 본문은 릴리스 노트 팝업과 같은 렌더러를 써서 서식을 맞춘다.
+        var body = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        NotesRenderer.Render(body, r.Body, this);
+        stack.Children.Add(body);
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Background = (Brush)FindResource("CardBg"),
+            BorderBrush = isCurrent ? (Brush)FindResource("Accent") : Brushes.Transparent,
+            BorderThickness = new Thickness(isCurrent ? 1 : 0),
+            Padding = new Thickness(16, 14, 16, 14),
+            Margin = new Thickness(0, 0, 0, 10),
+            Child = stack,
+        };
     }
 
     private void OnResetPosition(object sender, RoutedEventArgs e) => _slime.ResetPositionPublic();
 
-    /// <summary>최신 릴리스 노트를 받아 팝업으로 보여준다(네트워크 실패 시 안내만).</summary>
-    private async void OnShowReleaseNotes(object sender, RoutedEventArgs e)
-    {
-        var btn = sender as System.Windows.Controls.Button;
-        string? original = btn?.Content as string;
-        if (btn != null) { btn.IsEnabled = false; btn.Content = "불러오는 중…"; }
-
-        try
-        {
-            // 업데이트 직후 보관해 둔 노트가 있으면 그걸 먼저 보여준다(방금 뭐가 바뀌었는지).
-            // 없으면 최신 릴리스를 조회한다. 팝업을 없앤 대신 여기서 언제든 확인할 수 있다.
-            var notes = UpdateService.LoadLastNotes() ?? await UpdateService.FetchLatestNotesAsync();
-            if (notes == null)
-            {
-                MessageBox.Show(this, "릴리스 정보를 가져오지 못했습니다. 네트워크 상태를 확인해 주세요.",
-                    "ThrowMe", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            new ReleaseNotesWindow(notes, _settings) { Owner = this }.ShowDialog();
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Failed to show release notes on demand.", ex);
-        }
-        finally
-        {
-            if (btn != null) { btn.IsEnabled = true; btn.Content = original ?? "최근 변경 내용 보기"; }
-        }
-    }
 
     private void UpdateBilliardSection()
         => BilliardSection.Visibility = _settings.Skin == SlimeSkinKind.Billiard ? Visibility.Visible : Visibility.Collapsed;

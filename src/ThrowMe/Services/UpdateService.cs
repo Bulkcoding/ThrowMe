@@ -236,6 +236,45 @@ public static class UpdateService
     /// 최신 릴리스의 노트를 즉시 조회한다(설정창의 "최근 변경 내용 보기"용).
     /// 네트워크 실패 시 null.
     /// </summary>
+    /// <summary>
+    /// 릴리스 목록을 최신순으로 가져온다(설정 → 업데이트 노트 탭에서 전체 이력 표시용).
+    /// 실패하면 빈 목록.
+    /// </summary>
+    public static async Task<List<ReleaseNotes>> FetchAllReleasesAsync(int max = 30)
+    {
+        var list = new List<ReleaseNotes>();
+        if (!UpdateConfig.Enabled) return list;
+        try
+        {
+            using var http = CreateClient(Token);
+            string api = $"https://api.github.com/repos/{UpdateConfig.Owner}/{UpdateConfig.Repo}" +
+                         $"/releases?per_page={Math.Clamp(max, 1, 100)}";
+            using var doc = JsonDocument.Parse(await http.GetStringAsync(api));
+
+            foreach (var r in doc.RootElement.EnumerateArray())
+            {
+                // 초안·프리릴리스는 건너뛴다(사용자에게 배포된 것만).
+                if (r.TryGetProperty("draft", out var d) && d.GetBoolean()) continue;
+                if (r.TryGetProperty("prerelease", out var p) && p.GetBoolean()) continue;
+
+                Version? v = ParseTag(r.GetProperty("tag_name").GetString());
+                list.Add(new ReleaseNotes
+                {
+                    Version = v?.ToString(3) ?? (r.GetProperty("tag_name").GetString() ?? "").TrimStart('v'),
+                    Title = r.TryGetProperty("name", out var n) ? (n.GetString() ?? "").Trim() : "",
+                    Body = r.TryGetProperty("body", out var b)
+                        ? (b.GetString() ?? "").Replace("\r\n", "\n").Trim()
+                        : "",
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Failed to fetch release list.", ex);
+        }
+        return list;
+    }
+
     public static async Task<ReleaseNotes?> FetchLatestNotesAsync()
     {
         if (!UpdateConfig.Enabled) return null;

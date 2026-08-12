@@ -36,6 +36,9 @@
             <MenuItem x:Name="MenuBowlingReset" Header="핀 다시 세우기" Click="OnBowlingReset" Style="{StaticResource DarkMenuItem}"/>
             <MenuItem x:Name="MenuBowlingExit" Header="볼링 끝내기" Click="OnBowlingExit" Style="{StaticResource DarkMenuItem}"/>
             <Separator Style="{StaticResource DarkSeparator}"/>
+            <!-- 현재 버전 표시(누를 수 없는 안내 항목). 텍스트는 코드에서 채운다. -->
+            <MenuItem x:Name="MenuVersion" Header="버전" IsEnabled="False"
+                      Style="{StaticResource DarkMenuItem}"/>
             <MenuItem Header="종료" Click="OnExit" Style="{StaticResource DarkMenuItem}"/>
         </ContextMenu>
     </Window.ContextMenu>
