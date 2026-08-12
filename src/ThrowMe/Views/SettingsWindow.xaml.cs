@@ -68,6 +68,7 @@ public partial class SettingsWindow : Window
         // 방 멤버·순서·방장이 바뀌면 파티 목록을 다시 그린다.
         _slime.RoomStateChanged += OnRoomStateChanged;
         RefreshNetworkPanel();
+        UpdateThemeLock();
 
         Closed += (_, _) =>
         {
@@ -612,7 +613,27 @@ public partial class SettingsWindow : Window
         UpdateNetStatus(_slime.RelayState);
     }
 
-    private void OnRoomStateChanged() => Dispatcher.Invoke(RefreshPartyList);
+    private void OnRoomStateChanged() => Dispatcher.Invoke(() =>
+    {
+        RefreshPartyList();
+        UpdateThemeLock();
+    });
+
+    /// <summary>
+    /// 방에 들어가 있고 내가 방장이 아니면 테마 탭을 막는다.
+    /// 방장의 테마·가중치·그림이 그대로 내려오므로 여기서 바꿔 봐야 곧 덮어써진다.
+    /// </summary>
+    private void UpdateThemeLock()
+    {
+        bool inRoom = _slime.RelayAuth.Enabled && _slime.RoomNodes.Count > 0;
+        bool locked = inRoom && !_slime.IsHost;
+
+        ThemeLockedNotice.Visibility = locked ? Visibility.Visible : Visibility.Collapsed;
+        ThemeCards.IsEnabled = !locked;
+        ThemeCards.Opacity = locked ? 0.45 : 1.0;
+        CustomImageSection.IsEnabled = !locked;
+        CustomImageSection.Opacity = locked ? 0.45 : 1.0;
+    }
 
     private void OnRoomTabChanged(object sender, RoutedEventArgs e)
     {
@@ -720,7 +741,7 @@ public partial class SettingsWindow : Window
 
         // 방 공통 테마는 방장에게만 노출.
         RoomThemePanel.Visibility = host && shown.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (RoomThemePanel.Visibility == Visibility.Visible) SyncRoomThemeCombo();
+
 
         PartyHint.Text = shown.Count == 0
             ? "방에 입장하면 참여자가 표시됩니다."
@@ -751,34 +772,6 @@ public partial class SettingsWindow : Window
             : shown.Count == 1 ? "혼자 있는 방입니다. 다른 PC가 입장하면 좌우로 이어집니다." : "";
     }
 
-    // ── 방 공통 테마(방장) ──────────────────────────────────
-    private bool _syncingRoomTheme;
-
-    private void SyncRoomThemeCombo()
-    {
-        if (RoomThemeCombo.Items.Count == 0)
-        {
-            // 스타일을 안 주면 시스템 기본(검은 글씨)이라 어두운 배경에서 안 보인다.
-            var itemStyle = (Style)FindResource("DarkComboItem");
-            foreach (var (kind, name) in Skins)
-                RoomThemeCombo.Items.Add(new ComboBoxItem { Content = name, Tag = kind, Style = itemStyle });
-        }
-
-        _syncingRoomTheme = true;
-        foreach (ComboBoxItem it in RoomThemeCombo.Items)
-        {
-            if (it.Tag is SlimeSkinKind k && k == _settings.Skin) { RoomThemeCombo.SelectedItem = it; break; }
-        }
-        _syncingRoomTheme = false;
-    }
-
-    private void OnRoomThemeChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_syncingRoomTheme) return;
-        if (RoomThemeCombo.SelectedItem is not ComboBoxItem { Tag: SlimeSkinKind kind }) return;
-        _settings.Skin = kind;        // 내 테마 먼저 적용
-        _slime.PushRoomTheme(kind);   // 방 전체에 배포(방장만 유효)
-    }
 
     /// <summary>카드 사이를 잇는 연결선(공이 지나가는 통로).</summary>
     private UIElement BuildConnector()

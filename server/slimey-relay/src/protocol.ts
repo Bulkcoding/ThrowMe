@@ -14,6 +14,7 @@ export type MessageType =
   | "SET_ORDER"      // host → server : 파티 순서(좌→우 배치) 변경. 방장만 허용
   | "TRANSFER_HOST"  // host → server : 방장 위임(대상 노드로). 방장만 허용
   | "SET_THEME"      // host → server : 방 공통 테마 지정. 방장만 허용
+  | "ROOM_STYLE"     // host → server → 방 전체 : 방장의 겉모습 전체(테마·가중치·그림). 방장만 허용
   | "HANDOFF"        // owner → server → target : 공 넘김
   | "ACK"            // target → server : 공 수락
   | "HANDOFF_RESULT" // server → origin : 최종 결과(accepted → 해제 / 거부 → 반사)
@@ -61,6 +62,25 @@ export interface TransferHostData {
 /** 방 공통 테마 지정(방장만). */
 export interface SetThemeData {
   theme: string;           // AppSettings.Skin 이름(Jelly/Billiard/Pokeball/...)
+}
+
+/**
+ * 방장의 겉모습을 방 전체에 그대로 적용(방장만).
+ *
+ * 이미지(PNG base64)가 들어갈 수 있어 **서버는 저장하지 않고 중계만** 한다.
+ * (DO 저장은 키당 128KB 제한이라 이미지를 담기 어렵다.)
+ * 나중에 들어온 사람에게는 방장이 프레즌스 변화를 보고 다시 보내 준다.
+ */
+export interface RoomStyleData {
+  skin: string;              // 테마
+  throwPower: number;        // 던지기 가중치
+  restitution: number;       // 반발력
+  softness: number;          // 말랑함
+  slimeSize: number;         // 크기
+  skinImageEnabled: boolean; // 커스텀 이미지 덧씌우기
+  skinImageScale: number;    // 이미지 크기 비율
+  imageSkin?: string;        // 이미지가 속한 테마 이름
+  imagePng?: string;         // 그림판/불러온 이미지(base64 PNG). 없으면 이미지 없음
 }
 
 export interface NodePresence {

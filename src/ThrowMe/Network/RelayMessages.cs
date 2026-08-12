@@ -22,6 +22,7 @@ public static class MsgType
     public const string SetOrder = "SET_ORDER";
     public const string TransferHost = "TRANSFER_HOST";
     public const string SetTheme = "SET_THEME";
+    public const string RoomStyle = "ROOM_STYLE";
     public const string Handoff = "HANDOFF";
     public const string Ack = "ACK";
     public const string HandoffResult = "HANDOFF_RESULT";
@@ -95,6 +96,25 @@ public sealed class TransferHostData
 public sealed class SetThemeData
 {
     [JsonPropertyName("theme")] public string Theme { get; set; } = "";
+}
+
+/// <summary>
+/// 방장의 겉모습을 방 전체에 그대로 적용(방장만). 테마·가중치·커스텀 이미지를 함께 담는다.
+/// 서버는 저장하지 않고 중계만 하므로, 새로 들어온 사람에게는 방장이 다시 보낸다.
+/// </summary>
+public sealed class RoomStyleData
+{
+    [JsonPropertyName("skin")] public string Skin { get; set; } = "";
+    [JsonPropertyName("throwPower")] public double ThrowPower { get; set; }
+    [JsonPropertyName("restitution")] public double Restitution { get; set; }
+    [JsonPropertyName("softness")] public double Softness { get; set; }
+    [JsonPropertyName("slimeSize")] public double SlimeSize { get; set; }
+    [JsonPropertyName("skinImageEnabled")] public bool SkinImageEnabled { get; set; }
+    [JsonPropertyName("skinImageScale")] public double SkinImageScale { get; set; }
+    /// <summary>이미지가 속한 테마 이름(없으면 이미지 없음).</summary>
+    [JsonPropertyName("imageSkin")] public string? ImageSkin { get; set; }
+    /// <summary>커스텀 이미지(base64 PNG). 없으면 null.</summary>
+    [JsonPropertyName("imagePng")] public string? ImagePng { get; set; }
 }
 
 public sealed class EdgeLinkDto

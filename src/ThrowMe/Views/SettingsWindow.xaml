@@ -205,6 +205,18 @@
                         <!-- ══ 테마 ══ -->
                         <StackPanel x:Name="PanelTheme" Visibility="Collapsed">
                             <TextBlock Text="테마" Style="{StaticResource H1}"/>
+                            <!-- 방장이 아니면 방장의 테마가 강제 적용되므로 이 탭을 막는다. -->
+                            <Border x:Name="ThemeLockedNotice" Visibility="Collapsed"
+                                    CornerRadius="10" Background="{StaticResource CardBg}"
+                                    BorderBrush="{StaticResource Accent}" BorderThickness="1"
+                                    Padding="14,12" Margin="0,10,0,4">
+                                <StackPanel>
+                                    <TextBlock Text="방장이 정한 테마가 적용됩니다"
+                                               Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                                    <TextBlock Style="{StaticResource RowDesc}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                               Text="같은 방에서는 방장의 테마·가중치·그림이 모두에게 똑같이 적용됩니다. 직접 바꾸려면 방을 나가세요."/>
+                                </StackPanel>
+                            </Border>
                             <TextBlock Text="슬라임 스킨을 고르세요. 카드를 눌러 미리보고 바로 적용됩니다." Style="{StaticResource RowDesc}" Margin="0,4,0,0"/>
                             <WrapPanel x:Name="ThemeCards" Margin="0,16,0,0"/>
 
@@ -424,14 +436,13 @@
                                         Click="OnJoinRoom"/>
                             </StackPanel>
 
-                            <!-- ── 방 공통 테마 (방장만) ── -->
+                            <!-- ── 방 겉모습 안내 (방장만) ──
+                                 별도 콤보를 두지 않는다. 방장이 '테마' 탭에서 고른 테마·가중치·그림이
+                                 그대로 방 전체에 적용된다. -->
                             <StackPanel x:Name="RoomThemePanel" Visibility="Collapsed">
-                                <TextBlock Text="방 공통 테마" Style="{StaticResource Section}"/>
-                                <TextBlock Text="방장이 고르면 방에 있는 모든 PC의 테마가 함께 바뀝니다."
-                                           Style="{StaticResource RowDesc}"/>
-                                <ComboBox x:Name="RoomThemeCombo" Style="{StaticResource DarkCombo}"
-                                          Margin="0,8,0,0" Width="200" HorizontalAlignment="Left"
-                                          SelectionChanged="OnRoomThemeChanged"/>
+                                <TextBlock Text="방 겉모습" Style="{StaticResource Section}"/>
+                                <TextBlock Style="{StaticResource RowDesc}" TextWrapping="Wrap"
+                                           Text="'테마' 탭에서 고른 테마·가중치·그림이 방에 있는 모든 PC에 그대로 적용됩니다. 참가자는 테마를 바꿀 수 없습니다."/>
                             </StackPanel>
 
                             <!-- ── 파티원 (좌 → 우 배치) ── -->

@@ -125,6 +125,9 @@ public static class SkinImageStore
         }
     }
 
+    /// <summary>파일을 밖에서 바꿔 썼을 때(방장 이미지 수신 등) 캐시를 버린다.</summary>
+    public static void Invalidate(SlimeSkinKind kind) => _cache.Remove(kind);
+
     /// <summary>이 테마의 커스텀 이미지를 지운다.</summary>
     public static void Remove(SlimeSkinKind kind)
     {

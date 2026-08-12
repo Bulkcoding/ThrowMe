@@ -126,6 +126,8 @@ export class RoomDurableObject extends DurableObject<Env> {
         return this.handleTransferHost(meta, env as Envelope<{ to: string }>);
       case "SET_THEME":
         return this.handleSetTheme(meta, env as Envelope<{ theme: string }>);
+      case "ROOM_STYLE":
+        return this.handleRoomStyle(meta, env);
       default:
         return this.sendError(ws, ErrorCodes.BAD_MESSAGE, `unknown type ${env.type}`);
     }
@@ -369,6 +371,28 @@ export class RoomDurableObject extends DurableObject<Env> {
     await this.ctx.storage.put("host", this.host);
     await this.ctx.storage.put("hostExplicit", true);
     this.broadcastPresence();
+  }
+
+  // ── ROOM_STYLE: 방장의 겉모습을 방 전체에 중계(방장만) ───────
+  //
+  // 이미지가 포함될 수 있어 **저장하지 않고 그대로 전달만** 한다(DO 저장 키당 128KB 제한).
+  // 늦게 들어온 사람에게는 방장이 프레즌스를 보고 다시 보낸다.
+  private handleRoomStyle(meta: SocketMeta, env: Envelope): void {
+    if (this.host !== meta.nodeId) {
+      return this.sendToNode(meta.nodeId, {
+        v: PROTOCOL_VERSION, type: "ERROR",
+        data: { code: ErrorCodes.NOT_HOST, message: "only host can set room style" },
+      });
+    }
+    if (!env.data) return;
+
+    const msg = JSON.stringify({
+      v: PROTOCOL_VERSION, type: "ROOM_STYLE", from: meta.nodeId, data: env.data,
+    });
+    for (const s of this.authenticatedSockets()) {
+      if (this.metaOf(s)?.nodeId === meta.nodeId) continue; // 보낸 사람 제외
+      try { s.send(msg); } catch { /* ignore */ }
+    }
   }
 
   // ── SET_THEME: 방 공통 테마(방장만) ──────────────────────────

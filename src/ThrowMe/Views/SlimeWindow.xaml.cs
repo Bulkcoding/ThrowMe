@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -993,8 +994,25 @@ public partial class SlimeWindow : Window
     }
 
     // ── 설정 변경 반영 ──────────────────────────────────────
+    /// <summary>방장이 바꾸면 방 전체에 반영되는 "겉모습" 항목들.</summary>
+    private static readonly HashSet<string> RoomStyleProperties = new(StringComparer.Ordinal)
+    {
+        nameof(AppSettings.Skin),
+        nameof(AppSettings.ThrowPower),
+        nameof(AppSettings.Restitution),
+        nameof(AppSettings.Softness),
+        nameof(AppSettings.SlimeSize),
+        nameof(AppSettings.SkinImages),
+        nameof(AppSettings.SkinImageEnabled),
+        nameof(AppSettings.SkinImageScale),
+    };
+
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // 방장이 겉모습을 바꾸면 방 전체에 그대로 배포한다.
+        if (e.PropertyName != null && RoomStyleProperties.Contains(e.PropertyName))
+            SchedulePushRoomStyle();
+
         switch (e.PropertyName)
         {
             case nameof(AppSettings.AlwaysOnTop):
@@ -1758,6 +1776,121 @@ public partial class SlimeWindow : Window
         });
     }
 
+    // ── 방 겉모습 동기화(방장 → 전원) ───────────────────────
+    //
+    // 방장이 테마 탭에서 고른 테마·가중치·그림이 곧 방 전체의 모습이 된다.
+    // 참가자는 테마 탭이 막히고, 여기서 받은 값으로 맞춰진다.
+
+    /// <summary>수신 적용 중에는 되돌려 보내지 않도록 하는 표시(피드백 루프 방지).</summary>
+    private bool _applyingRoomStyle;
+    private System.Windows.Threading.DispatcherTimer? _stylePushTimer;
+    private readonly HashSet<string> _knownMembers = new(StringComparer.Ordinal);
+
+    /// <summary>이미지가 너무 크면 보내지 않는다(릴레이 메시지 한도 보호).</summary>
+    private const int MaxStyleImageBytes = 600 * 1024;
+
+    /// <summary>방장의 현재 겉모습을 방 전체에 배포한다(짧게 모아서 한 번만).</summary>
+    private void SchedulePushRoomStyle()
+    {
+        if (_relay == null || !IsHost || _applyingRoomStyle) return;
+
+        _stylePushTimer ??= new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(350), // 슬라이더를 끌 때 매번 보내지 않도록
+        };
+        _stylePushTimer.Stop();
+        _stylePushTimer.Tick -= OnStylePushTick;
+        _stylePushTimer.Tick += OnStylePushTick;
+        _stylePushTimer.Start();
+    }
+
+    private void OnStylePushTick(object? sender, EventArgs e)
+    {
+        _stylePushTimer?.Stop();
+        PushRoomStyle();
+    }
+
+    /// <summary>지금 설정을 그대로 방에 보낸다(방장만).</summary>
+    private void PushRoomStyle()
+    {
+        if (_relay == null || !IsHost) return;
+
+        var data = new RoomStyleData
+        {
+            Skin = _settings.Skin.ToString(),
+            ThrowPower = _settings.ThrowPower,
+            Restitution = _settings.Restitution,
+            Softness = _settings.Softness,
+            SlimeSize = _settings.SlimeSize,
+            SkinImageEnabled = _settings.SkinImageEnabled,
+            SkinImageScale = _settings.SkinImageScale,
+        };
+
+        // 현재 테마의 커스텀 이미지가 있으면 같이 실어 보낸다.
+        try
+        {
+            if (SkinImageStore.Supports(_settings.Skin) && SkinImageStore.Has(_settings.Skin))
+            {
+                byte[] png = File.ReadAllBytes(SkinImageStore.PathFor(_settings.Skin));
+                if (png.Length <= MaxStyleImageBytes)
+                {
+                    data.ImageSkin = _settings.Skin.ToString();
+                    data.ImagePng = Convert.ToBase64String(png);
+                }
+                else
+                {
+                    Logger.Info($"Room style image skipped ({png.Length} bytes > limit).");
+                }
+            }
+        }
+        catch (Exception ex) { Logger.Error("Failed to attach skin image to room style.", ex); }
+
+        _ = _relay.SendAsync(new Envelope
+        {
+            Type = MsgType.RoomStyle,
+            From = _selfNodeId,
+            Data = RelayJson.ToElement(data),
+        });
+        Logger.Info($"Room style pushed (skin={data.Skin}, image={(data.ImagePng != null ? "yes" : "no")}).");
+    }
+
+    /// <summary>방장이 보낸 겉모습을 이 PC에 적용(참가자).</summary>
+    private void ApplyRoomStyle(RoomStyleData d)
+    {
+        _applyingRoomStyle = true;
+        try
+        {
+            // 이미지 먼저 저장해야 테마가 바뀔 때 바로 반영된다.
+            if (!string.IsNullOrEmpty(d.ImageSkin) && !string.IsNullOrEmpty(d.ImagePng)
+                && Enum.TryParse<SlimeSkinKind>(d.ImageSkin, ignoreCase: true, out var imgSkin))
+            {
+                try
+                {
+                    byte[] png = Convert.FromBase64String(d.ImagePng);
+                    File.WriteAllBytes(SkinImageStore.PathFor(imgSkin), png);
+                    SkinImageStore.Invalidate(imgSkin);
+                    _settings.SkinImages[imgSkin.ToString()] = "(방장 이미지)";
+                    _settings.NotifySkinImagesChanged();
+                }
+                catch (Exception ex) { Logger.Error("Failed to save room style image.", ex); }
+            }
+
+            if (Enum.TryParse<SlimeSkinKind>(d.Skin, ignoreCase: true, out var skin))
+                _settings.Skin = skin;
+
+            _settings.ThrowPower = d.ThrowPower;
+            _settings.Restitution = d.Restitution;
+            _settings.Softness = d.Softness;
+            if (d.SlimeSize > 0) _settings.SlimeSize = d.SlimeSize;
+            _settings.SkinImageEnabled = d.SkinImageEnabled;
+            if (d.SkinImageScale > 0) _settings.SkinImageScale = d.SkinImageScale;
+
+            Logger.Info($"Room style applied (skin={d.Skin}).");
+        }
+        catch (Exception ex) { Logger.Error("Failed to apply room style.", ex); }
+        finally { _applyingRoomStyle = false; }
+    }
+
     /// <summary>서버가 알려준 방 공통 테마를 이 PC에 적용.</summary>
     private void ApplyRoomTheme(string? theme)
     {
@@ -1792,6 +1925,18 @@ public partial class SlimeWindow : Window
 
         Logger.Info($"Room state: host={host} owner-sync order=[{string.Join(",", _roomOrder)}] " +
                     $"online=[{string.Join(",", nodes.Select(n => n.NodeId))}]");
+
+        // 방장은, 새로 들어온 사람이 보이면 겉모습을 다시 보내 준다.
+        // (서버는 이미지 때문에 스타일을 저장하지 않으므로 늦게 온 사람은 이렇게 받는다.)
+        if (IsHost)
+        {
+            bool newcomer = nodes.Any(n => _knownMembers.Add(n.NodeId)) && _knownMembers.Count > 1;
+            if (newcomer) SchedulePushRoomStyle();
+        }
+        else
+        {
+            _knownMembers.Clear();
+        }
 
         // 설정창 갱신에서 예외가 나도 여기서 끊어 낸다.
         // 안 그러면 그 예외가 OnRelayMessage 까지 타고 올라가 뒤이어 실행돼야 할
@@ -1966,6 +2111,11 @@ public partial class SlimeWindow : Window
             case MsgType.SetTheme:
                 // 방장이 방 테마를 바꿈 → 전원 즉시 반영.
                 if (env.DataAs<SetThemeData>() is { } th) ApplyRoomTheme(th.Theme);
+                break;
+
+            case MsgType.RoomStyle:
+                // 방장의 겉모습(테마·가중치·그림) 전체를 그대로 따른다.
+                if (!IsHost && env.DataAs<RoomStyleData>() is { } style) ApplyRoomStyle(style);
                 break;
 
             case MsgType.RoomConfig:
