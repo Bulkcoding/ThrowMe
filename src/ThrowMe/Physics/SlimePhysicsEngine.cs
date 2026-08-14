@@ -93,7 +93,7 @@ public sealed class SlimePhysicsEngine
     public bool IsCurrentPositionValid() => Area.IsRectValid(RectFor(Position.X, Position.Y));
 
     /// <summary>바닥(또는 아래 벽)에 닿아 더 내려갈 수 없는가. 중력 안착 판정용.</summary>
-    private bool IsGrounded() => !Area.IsRectValid(RectFor(Position.X, Position.Y + 2.0));
+    public bool IsGrounded() => !Area.IsRectValid(RectFor(Position.X, Position.Y + 2.0));
 
     /// <summary>deltaTime(초) 기반으로 한 프레임 진행.</summary>
     public PhysicsStepResult Update(double dt)

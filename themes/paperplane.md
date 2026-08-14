@@ -63,29 +63,121 @@ Space 를 그냥 전역 등록하면 **다른 모든 앱에서 스페이스바�
 **신규**
 - `src/ThrowMe/Views/Skins/PaperPlaneSkin.xaml`
 - `src/ThrowMe/Views/Skins/PaperPlaneSkin.xaml.cs`
+- `src/ThrowMe/Views/Skins/ISkinHeading.cs` — 진행 방향 자세(좌우 뒤집기 + 기수 각도)
+- `src/ThrowMe/Views/Skins/ISkinCrumple.cs` — 구겨짐/펴짐 전환
+- `src/ThrowMe/Views/SlimeWindow.PaperPlane.cs` — 이 테마의 동작 전부를 담은 partial
+  (활공·양력·sway·마우스 바람·구겨짐·바람 단축키). 공유 파일을 크게 건드리지 않도록 분리했다.
 
 **공유 파일 append (충돌 핫스팟 — 기존 줄 수정 금지, 맨 끝에 한 줄만 추가)**
 - `Models/SlimeSkinKind.cs` — enum `PaperPlane = 7` 추가
 - `Views/SlimeWindow.xaml.cs` → `ApplySkin()` 에 `SlimeSkinKind.PaperPlane => new PaperPlaneSkin()` case 추가
 - `Views/SettingsWindow.xaml.cs` → `Skins[]` 에 `(PaperPlane, "종이비행기")`, `MakeSkin()` 에 case 추가
 
-**이 테마에서 추가로 건드릴 곳 (위 4곳 외)**
-- `Models/AppSettings.cs` — 바람 단축키 **키 하나만**(`WindHotkeyVk`, 기본 `Space`=0x20) 추가.
-  수정자는 `Ctrl` 고정이라 저장하지 않는다.
-- `Views/SlimeWindow.xaml.cs` — 활공/양력·구겨짐·sway·마우스 바람·단축키 등록/해제 로직.
-  `UpdateSkinBehavior()` 에서 `GravityY` 설정(농구공과 같은 자리).
-- `Views/SettingsWindow.xaml.cs` — 단축키 재설정 UI(기존 잡기/숨기기 단축키 행과 같은 형식).
-  단, **`Ctrl` 은 고정 표시(비활성)** 하고 뒤 키 1개만 캡처받는다.
-- **바람 오버레이 창을 새로 만든다면** → 규칙 §3.6 에 따라 `ApplyVisibility()` 에 반드시 등록할 것
-  (숨기기 단축키로 바람 이펙트까지 같이 사라져야 한다).
+> 위 신규 파일 2개와 공유 파일 4곳 append 는 **완료**(빌드 0 경고 / 0 오류).
+> `Services/PreviewRenderer.cs` 에도 개발용 미리보기 한 줄을 추가했다(일반 실행 경로에는 영향 없음).
+
+**이 테마에서 추가로 건드린 곳 (위 4곳 외) — 모두 완료**
+- `Models/AppSettings.cs` — `WindHotkeyVk`(기본 `Space`=0x20)와 `ThrowPowerBeforePaperPlane` 추가.
+  바람 단축키의 수정자는 `Ctrl` 고정이라 저장하지 않는다.
+- `Views/SlimeWindow.xaml.cs` — 호출 지점만 최소로 추가:
+  `UpdateSkinBehavior()`(중력·`ApplyPaperPlaneBehavior()`), 렌더 루프(`TickPaperPlaneAero` /
+  `TickPaperPlaneVisual` / `OnPaperPlaneCollided`), `WndProc`(바람 단축키), `ApplyVisibility()`·종료 정리,
+  `BeginGrab`·`CatchToCursor`(집으면 펴 준다), `DragTo`(스핀 충전 제외).
+- `Views/SettingsWindow.xaml`/`.xaml.cs` — "종이비행기 바람" 행 추가.
+  `Ctrl +` 는 회색 고정 텍스트로 보여 주고 `WindKeyBtn` 으로 뒤 키 1개만 캡처받는다(즉시 적용).
+- `Effects/ParticleSystem.cs` — `EmitWind()` 추가(방향성 바람 입자).
+- `Physics/SlimePhysicsEngine.cs` — `IsGrounded()` 를 `public` 으로(착지·구겨짐 복구 판정에 필요).
+- `Views/SlimeWindow.xaml` — 공통 원형 그림자에 `x:Name="CommonShadow"` (종이비행기에서 숨긴다).
+- **바람 이펙트는 새 창을 만들지 않았다.** 기존 `ParticleOverlayWindow` 가 그리므로
+  규칙 §3.6 의 숨기기 대상에 이미 포함되어 있다(추가 등록 불필요).
 
 ## 3. 구현 메모
-- (작성) 그리는 방식(Path/Polygon 으로 접은 면 표현, 면마다 명암 차이로 입체감 등),
-  참고한 기존 스킨, 까다로웠던 점.
+
+### 3.1 스킨 겉모습 (완료)
+- **참고 이미지**: `image/종이비행기.jpg` (라인아트 — 흰 종이 면 + 굵은 검정 외곽선, 기수는 오른쪽 위).
+  이미지의 꼭짓점 좌표를 96×96 디자인 좌표로 옮겨 그렸다.
+
+| 점 | 좌표 | 의미 |
+|:--:|------|------|
+| N | 90, 23 | 기수(nose) |
+| A | 6, 34 | 위쪽 날개 뒤끝 |
+| B | 19.6, 42.3 | 왼쪽 접힘점 |
+| C | 27.9, 45.2 | 중앙 접힘 아래점 |
+| D | 24.4, 65.4 | 동체 아래 왼쪽 |
+| E | 27.9, 63.6 | 동체 아래 오른쪽 |
+| F | 39.3, 73.2 | 꼬리 아래 끝 |
+
+- **면 4장**을 `Path` 로 그리고 명암을 달리해 접힌 입체감을 냈다(뒤 → 앞 순서로 겹침).
+  1. 동체 안쪽 면 `B-D-E-C` — 가장 어둡게 (`#DCE1E9`→`#BAC2CE`)
+  2. 기수에서 뻗은 좁은 접힘 면 `N-B-C` — 중간 (`#EBEEF3`→`#CBD2DC`)
+  3. 위쪽 날개 `N-A-B` — 밝게 (`#FDFDFF`→`#E4E8EE`)
+  4. 앞쪽 큰 날개 `N-C-F` — 가장 밝게 (`#FFFFFF`→`#E2E6ED`)
+- 외곽선은 참고 이미지 느낌대로 굵게: `Stroke="#16161A"`, 두께 2.3(큰 날개만 2.6), `StrokeLineJoin="Round"`.
+- 그림자는 전체 실루엣(`A-N-F-E-D-B`)을 `TranslateTransform(2, 3.4)` 로 밀고 `BlurEffect(5)`.
+- `Rigid`(찌그러짐 없음)는 `SlimeWindow.UpdateSkinBehavior()` 가 **젤리 외 전부 Rigid** 로 처리하므로
+  종이비행기는 추가 작업 없이 단단하게 동작한다.
+
+#### 모양 확인 방법 (오프라인 렌더)
+`Services/PreviewRenderer.cs` 에 종이비행기 4장을 추가해 두었다. 창을 띄우지 않고 PNG로 확인할 수 있다.
+```powershell
+dotnet build src/ThrowMe/ThrowMe.csproj -c Debug
+src\ThrowMe\bin\Debug\net8.0-windows\ThrowMe.exe --render-preview <출력폴더>
+# → paperplane.png / paperplane_right.png / paperplane_left.png / paperplane_crumpled.png
+```
+
+### 3.2 방향 표현 — 스핀 대신 좌우 뒤집기 (완료)
+- **굴러가는 스핀은 쓰지 않는다**(사용자 결정). 종이비행기일 때 `AngularVelocity`·`SurfaceSpin`·`SpinAngle`
+  을 0으로 두고, `DragTo()` 의 스핀 충전도 건너뛴다 → 스핀 반짝이 이펙트도 자연히 뜨지 않는다.
+- 방향은 `ISkinHeading.SetHeading(atan2(vy, vx))` 하나로 표현한다.
+  - `Mirror.ScaleX = -1` 로 **왼쪽 비행 시 그림을 좌우로 뒤집는다**(사용자가 준 좌향 이미지와 같은 모양).
+  - 기본 그림의 기수 축이 `-24.4°`(꼬리 중앙 → 기수)라, 뒤집으면 축도 `204.4°` 가 된다.
+    회전각 = `진행각 - 축` 이라 좌·우 어느 쪽이든 기수가 진행 방향을 향한다.
+  - 좌/우 전환에 히스테리시스(`cos` ±0.10)를 둬서 수직으로 오르내릴 때 좌우가 떨리지 않는다.
+  - 자세는 매 프레임 지수 보간(`1-exp(-9*dt)`)해 급하게 꺾이지 않는다. 느려지면 `SetRestPose()`.
+
+### 3.3 활공 · 중력 · 흔들림 (완료)
+- 중력 `PaperGravity = 520`(농구공 2200보다 훨씬 작다) — `UpdateSkinBehavior()` 에서 `GravityY` 에 넣는다.
+- 공기저항 `FrictionOverride = 0.85`(기본 0.9). **활공 길이를 정하는 값이다.**
+- 양력: 진행 방향에 수직인 위쪽으로 `속도 × 1.6`(상한 `중력 × 0.97 = 504`)만큼 가속.
+  속도가 `504 / 1.6 = 315px/s` 아래로 떨어지면 양력이 중력을 못 이겨 가라앉기 시작한다.
+- **던지기**: `ReleaseGrab()` 의 던지기 분기에서 `속도 × 2.5` 후 `1800px/s` 로 클램프.
+  가중치를 최소(0.3)로 쓰기 때문에 배율 없이는 힘없이 나간다(실효 배율 ≈ 0.75).
+  슬라이더를 올리면 그만큼 더 세게 나가되 상한은 그대로다.
+- sway: 같은 수직 방향으로 `sin(t × 5.2) × 620` 을 더한다. 속도가 빠를수록 크게(700px/s 에서 최대).
+- 결과: 상한 속도로 던지면 약 2초간 거의 수평으로 미끄러지고, 착지까지 **2~3초**.
+- 값 변경 이력: 중력 780·양력 0.95·기본 마찰 → "너무 팍 떨어진다" → 중력 520·양력 1.6·마찰 0.32 →
+  "그래도 세게 날아간다, 2~3초면 된다" → 상한 1000·마찰 0.6 → "너무 약해졌다" →
+  **배율 2.5·상한 1800·마찰 0.85**(세기는 올리고 체공은 2~3초 유지).
+- 반발·마찰 오버라이드는 **농구 골대도 같은 필드를 쓴다.** 우리가 걸어 둔 경우에만 `null` 로 되돌려
+  골대 값을 덮지 않는다(`_paperPhysicsApplied` 플래그).
+
+### 3.3.1 던지기 가중치 (완료)
+- 종이비행기를 고르면 **던지기 가중치를 최소(0.3배)로 낮춘다.** 종이는 세게 던지는 것보다
+  살살 띄워 활공시키는 편이 어울린다.
+- 원래 값은 `AppSettings.ThrowPowerBeforePaperPlane` 에 보관하고 **다른 테마로 나갈 때 그대로 복구**한다.
+  설정 파일에 함께 저장하므로 종이비행기 상태로 앱을 끄고 켜도 잃지 않는다.
+- 종이비행기를 쓰는 동안 사용자가 직접 가중치를 올리면 그 값을 존중한다(다시 낮추지 않는다).
+
+### 3.4 구겨짐 · 복구 (완료)
+- 종이비행기 동안 `RestitutionOverride = 0` → 벽에서 **튕기지 않는다.**
+- 벽 충돌 세기가 120px/s 이상이면 `SetCrumpled(true)` — 구겨진 종이 뭉치 모양으로 바뀌고
+  양력·sway·바람이 모두 멈춘다(중력만 받는다).
+- 바닥에 닿아 거의 멈춘 뒤 0.45초 지나면 원래 모양으로 복구. 집어 들거나 커서로 회수해도 바로 펴진다.
+- 구겨진 동안에는 렌더 루프를 재우지 않는다(바닥에서 펴져야 하므로).
+
+### 3.5 바람 (완료)
+- **마우스 바람**: 커서가 공 크기 1.7배 안에 들어오면 커서에서 **멀어지는 방향**으로
+  `2600 × (1 - 거리/반경)` 만큼 가속하고, 그 방향으로 바람 입자를 뿌린다(0.07초 간격).
+- **단축키 바람**: `Ctrl + <키>` → 위로 `430px/s` 충격 + 공 아래에서 위로 향하는 바람 입자.
+  연사는 0.12초 간격으로 제한.
+- 활공 중(`PaperGliding`: 종이비행기 + 공중 + 잡고 있지 않음 + 일시정지 아님 + 보이는 상태)에만
+  `RegisterHotKey` 하고, 그 조건이 깨지면 즉시 `UnregisterHotKey`. 설정창이 열려 있는 동안에도 잡지 않는다
+  (키 재지정 입력이 설정창에 들어가야 한다).
 
 ## 4. 검증
-- [ ] 빌드 0 경고 / 0 오류
-- [ ] 설정창 테마 칩에 표시되고 선택 시 즉시 교체됨
+- [x] 빌드 0 경고 / 0 오류
+- [x] 설정창 테마 칩 목록(`Skins[]`)·`MakeSkin()`·`ApplySkin()` 에 등록됨 (앱 실행 육안 확인은 남음)
+- [x] 앱이 정상 실행됨(기동 확인). 좌향·우향·구겨진 모양은 오프라인 렌더 PNG로 확인
 - [ ] 드래그·던지기·충돌 정상 (활공/회전이 의도대로)
 - [ ] 유휴 시 CPU ≈ 0
 - [ ] **숨기기 단축키 → 이 테마가 띄운 것까지 전부 사라짐** (규칙 §3.6)
@@ -105,4 +197,9 @@ Space 를 그냥 전역 등록하면 **다른 모든 앱에서 스페이스바�
       메모장/브라우저에 `Ctrl + Space` 를 눌러 평소대로 동작하는지 직접 확인할 것
 
 ## 5. 남은 일 / 알려진 이슈
-- (있으면 기록)
+- §1.1 의 확정 동작 6가지는 모두 코드로 들어갔다. 다만 **실제 앱에서 손으로 만져 본 검증은 아직**이다
+  (앱이 정상 실행되는 것만 확인했다). §4·§4.1 의 체크박스를 실행하며 채워야 한다.
+- 세기 상수(중력 520, 마찰 0.85, 양력 1.6, 던지기 배율 2.5·상한 1800, sway 620, 바람 2600/430)는
+  눈으로 보며 더 조율할 여지가 있다.
+  전부 `SlimeWindow.PaperPlane.cs` 맨 위 상수 한 곳에 모아 두었다.
+- 회전 자세 때문에 도형이 96 디자인 박스를 살짝 넘어갈 수 있다(창은 공의 4배라 잘리지는 않는다).

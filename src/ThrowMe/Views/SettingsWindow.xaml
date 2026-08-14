@@ -337,6 +337,22 @@
                                 <Button Grid.Column="1" x:Name="AimKeyBtn" Style="{StaticResource GhostButton}"
                                         MinWidth="160" VerticalAlignment="Center" Click="OnRebindAimKey"/>
                             </Grid>
+                            <TextBlock Text="종이비행기 바람" Style="{StaticResource Section}"/>
+                            <Grid Margin="0,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="바람 단축키 (기본 Ctrl + Space)" Style="{StaticResource RowLabel}"/>
+                                    <TextBlock Text="종이비행기가 날고 있을 때 누르면 아래에서 바람이 불어 더 오래 활공합니다."
+                                               Style="{StaticResource RowDesc}"/>
+                                    <TextBlock Text="Ctrl 은 고정이며 뒤에 붙는 키만 바꿀 수 있습니다. 날고 있는 동안에만 잡으므로 평소에는 다른 앱이 그대로 씁니다."
+                                               Style="{StaticResource RowDesc}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="Ctrl +" VerticalAlignment="Center"
+                                           Opacity="0.45" Margin="0,0,8,0"/>
+                                <Button Grid.Column="2" x:Name="WindKeyBtn" Style="{StaticResource GhostButton}"
+                                        MinWidth="120" VerticalAlignment="Center" Click="OnRebindWindKey"/>
+                            </Grid>
+
                             <TextBlock Text="빠르게 숨기기" Style="{StaticResource Section}"/>
                             <Grid Margin="0,8">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

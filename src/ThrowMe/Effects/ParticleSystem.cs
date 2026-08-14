@@ -173,6 +173,40 @@ public sealed class ParticleSystem
         }
     }
 
+    /// <summary>
+    /// 종이비행기 바람. 지정 방향으로 짧고 빠르게 흐르는 입자 몇 개 —
+    /// 커서로 밀 때와 단축키로 아래에서 바람을 쏠 때 같이 쓴다.
+    /// </summary>
+    public void EmitWind(Vector2 origin, Vector2 dir, double intensity01)
+    {
+        if (!_settings.ParticlesEnabled) return;
+        if (dir.LengthSquared < 1e-6) return;
+
+        intensity01 = Math.Clamp(intensity01, 0, 1);
+        dir = dir.Normalized();
+        var tangent = new Vector2(-dir.Y, dir.X);
+        int count = 3 + (int)Math.Round(5 * intensity01);
+        EnsureSpread(origin);
+
+        for (int i = 0; i < count; i++)
+        {
+            double spread = (_rng.NextDouble() * 2.0 - 1.0) * 0.42;  // 부채꼴로 퍼짐
+            double speed = (620 + _rng.NextDouble() * 520) * (0.6 + 0.6 * intensity01);
+            Vector2 v = (dir + tangent * spread).Normalized() * speed;
+
+            _particles.Add(new Particle
+            {
+                Position = origin + tangent * ((_rng.NextDouble() * 2.0 - 1.0) * 18.0),
+                Velocity = v,
+                Age = 0,
+                LifeSpan = 0.24 * (0.7 + _rng.NextDouble() * 0.6),
+                Size = _settings.ParticleSize * 0.55 * (0.7 + _rng.NextDouble() * 0.5),
+                Tier = ImpactTier.Bonk,
+                Spark = true, // 밝고 작게 → 바람 결처럼 보인다
+            });
+        }
+    }
+
     /// <summary>deltaTime 진행. 수명이 다한 파티클 제거. 살아있는 게 있으면 true.</summary>
     public bool Update(double dt)
     {

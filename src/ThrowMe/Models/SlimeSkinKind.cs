@@ -23,4 +23,7 @@ public enum SlimeSkinKind
 
     /// <summary>볼링공 — 파란 마블. 굴러가며 9가지 무늬(손가락 구멍 배치)가 바뀐다.</summary>
     Bowling = 6,
+
+    /// <summary>종이비행기 — 접힌 면이 보이는 흰 종이비행기. 날아가는 물체 컨셉.</summary>
+    PaperPlane = 7,
 }

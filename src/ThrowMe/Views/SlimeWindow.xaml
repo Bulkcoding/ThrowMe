@@ -81,8 +81,8 @@
                     </TransformGroup>
                 </Grid.RenderTransform>
 
-                <!-- 그림자(스킨 공통) -->
-                <Ellipse Margin="14,20,14,6" Fill="#33000000">
+                <!-- 그림자(스킨 공통). 종이비행기처럼 둥글지 않은 스킨은 코드에서 숨긴다. -->
+                <Ellipse x:Name="CommonShadow" Margin="14,20,14,6" Fill="#33000000">
                     <Ellipse.Effect>
                         <BlurEffect Radius="8"/>
                     </Ellipse.Effect>
