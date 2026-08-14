@@ -609,13 +609,28 @@ public partial class SettingsWindow : Window
 
     private void OnSaveHotkey(object sender, RoutedEventArgs e)
     {
-        _settings.CatchHotkeyMod = _pMod;
+        // 잡기는 항상 Ctrl 을 포함한다(공이 모든 클릭을 가로채지 않도록).
+        int catchMod = _pMod | AppSettings.ModCtrl;
+
+        // 두 단축키가 같은 조합이면 한 번의 입력이 두 동작을 함께 일으켜 꼬인다.
+        bool sameKey = _pVk != 0 && _pVk == _hVk && catchMod == _hMod;
+        bool sameMouse = _pMouse != 0 && _pMouse == _hMouse && catchMod == _hMod;
+        if (sameKey || sameMouse)
+        {
+            MessageBox.Show(this,
+                "잡기와 숨기기에 같은 조합을 쓸 수 없습니다.\n둘 중 하나를 다른 키나 버튼으로 바꿔 주세요.",
+                "ThrowMe", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _settings.CatchHotkeyMod = catchMod;
         _settings.CatchHotkeyVk = _pVk;
         _settings.CatchHotkeyMouse = _pMouse;
         _settings.HideHotkeyMod = _hMod;
         _settings.HideHotkeyVk = _hVk;
         _settings.HideHotkeyMouse = _hMouse;
         SaveBtn.IsEnabled = false;
+        UpdateRebindText(); // Ctrl 강제 등 보정된 값을 화면에 반영
     }
 
     private void UpdateRebindText()

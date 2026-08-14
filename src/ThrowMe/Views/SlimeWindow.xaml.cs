@@ -180,6 +180,27 @@ public partial class SlimeWindow : Window
     [DllImport("kernel32.dll")] private static extern IntPtr GetModuleHandle(string? name);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
 
+    // ── 수정키 감시용 저수준 키보드 훅 ──
+    // 클릭 통과 여부는 "클릭이 오기 전에" 정해져 있어야 한다. 마우스 훅에서 바꾸면
+    // 이미 진행 중인 그 클릭에는 반영되지 않아 첫 클릭을 놓친다. Ctrl 을 누르고 떼는
+    // 순간에 미리 전환해 두면 그 다음 클릭부터 정확히 동작한다.
+    private const int WH_KEYBOARD_LL = 13;
+    private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+    private LowLevelKeyboardProc? _kbProc;
+    private IntPtr _kbHook;
+
+    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SetWindowsHookEx(int id, LowLevelKeyboardProc cb, IntPtr hMod, uint thread);
+
+    private IntPtr KeyboardHookProc(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0)
+        {
+            // 어떤 키든 눌리거나 떼이면 수정키 상태가 바뀌었을 수 있다.
+            try { UpdateClickThrough(); } catch { /* 훅에서 예외를 던지면 안 된다 */ }
+        }
+        return CallNextHookEx(_kbHook, nCode, wParam, lParam);
+    }
+
     private void RegisterHotkeys()
     {
         if (_hwnd == IntPtr.Zero) return;
@@ -199,12 +220,66 @@ public partial class SlimeWindow : Window
             _mouseProc = MouseHookProc;
             _mouseHook = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, GetModuleHandle(null), 0);
         }
+
+        // 수정키 감시는 항상 필요하다 — 클릭 통과 전환이 여기에 달려 있다.
+        if (_kbHook == IntPtr.Zero)
+        {
+            _kbProc = KeyboardHookProc;
+            _kbHook = SetWindowsHookEx(WH_KEYBOARD_LL, _kbProc, GetModuleHandle(null), 0);
+        }
+        UpdateClickThrough(); // 설정이 바뀌었을 수 있으니 현재 상태로 맞춘다
     }
 
     private void RemoveMouseTrigger()
     {
         if (_mouseHook != IntPtr.Zero) { UnhookWindowsHookEx(_mouseHook); _mouseHook = IntPtr.Zero; }
         _mouseProc = null;
+    }
+
+    private void RemoveKeyboardTrigger()
+    {
+        if (_kbHook != IntPtr.Zero) { UnhookWindowsHookEx(_kbHook); _kbHook = IntPtr.Zero; }
+        _kbProc = null;
+    }
+
+    // ── 공 잡기: Ctrl 을 누른 동안에만 클릭을 받는다 ──────────
+    //
+    // 예전에는 공 창이 항상 클릭을 받아서, 공이 지나가는 자리의 아이콘·버튼을 누를 수 없었다.
+    // 이제 평소에는 WS_EX_TRANSPARENT 로 클릭을 통째로 흘려보내고, 잡기 수정키(기본 Ctrl)를
+    // 누르고 있는 동안에만 스타일을 걷어 잡을 수 있게 한다.
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TRANSPARENT = 0x20;
+
+    [DllImport("user32.dll", SetLastError = true)] private static extern int GetWindowLong(IntPtr h, int i);
+    [DllImport("user32.dll", SetLastError = true)] private static extern int SetWindowLong(IntPtr h, int i, int v);
+
+    /// <summary>
+    /// 지금 클릭을 받는 상태인가(= 수정키가 눌려 있음).
+    /// null 이면 아직 한 번도 적용하지 않은 상태 — 창은 기본적으로 클릭을 받으므로
+    /// 첫 호출에서 반드시 스타일을 써야 한다(그냥 false 로 두면 "이미 통과 중"으로 오인한다).
+    /// </summary>
+    private bool? _clickable;
+
+    /// <summary>
+    /// 잡기 수정키가 눌린 상태에 맞춰 클릭 통과 여부를 갱신한다.
+    /// 상태가 바뀔 때만 스타일을 건드린다(마우스 훅에서 자주 불리므로).
+    /// </summary>
+    private void UpdateClickThrough()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+
+        // 수정키가 지정돼 있지 않으면(0) 예전처럼 항상 잡을 수 있게 둔다.
+        int mod = _settings.CatchHotkeyMod;
+        bool want = mod == 0 || ModifiersHeld(mod);
+        if (want == _clickable) return;
+
+        try
+        {
+            int ex = GetWindowLong(_hwnd, GWL_EXSTYLE);
+            SetWindowLong(_hwnd, GWL_EXSTYLE, want ? (ex & ~WS_EX_TRANSPARENT) : (ex | WS_EX_TRANSPARENT));
+            _clickable = want;
+        }
+        catch (Exception ex) { Logger.Error("Failed to toggle click-through.", ex); }
     }
 
     private static bool ModifiersHeld(int m)
@@ -228,6 +303,10 @@ public partial class SlimeWindow : Window
     {
         if (nCode >= 0)
         {
+            // 키보드 훅과 이중으로 갱신한다. 사용자는 수정키를 누른 뒤 마우스를 움직여 클릭하므로,
+            // 어느 한쪽 훅이 실패하더라도 클릭 전에 상태가 맞춰진다.
+            try { UpdateClickThrough(); } catch { /* 훅에서 예외를 던지면 안 된다 */ }
+
             int msg = (int)wParam;
             // 숨기기를 먼저 본다: 숨겨진 상태에선 잡기가 의미 없으므로 우선순위를 준다.
             if (_settings.HideHotkeyMouse != 0
@@ -3126,6 +3205,7 @@ public partial class SlimeWindow : Window
             UnregisterHotKey(_hwnd, WindHotkeyId); // 종이비행기 바람(활공 중에만 잡고 있던 것)
         }
         RemoveMouseTrigger();
+        RemoveKeyboardTrigger();
         _hwndSource?.RemoveHook(WndProc);
         _settings.PropertyChanged -= OnSettingsChanged;
         _monitors.LayoutChanged -= OnMonitorLayoutChanged;

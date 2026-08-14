@@ -147,16 +147,39 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     // ── 잡기 단축키(전역) ───────────────────────────────────
     /// <summary>잡기 단축키 수정자(Win32: ALT=1,CTRL=2,SHIFT=4,WIN=8 조합). 기본 CTRL+SHIFT.</summary>
-    private int _catchHotkeyMod = 2 | 4;
-    public int CatchHotkeyMod { get => _catchHotkeyMod; set => Set(ref _catchHotkeyMod, value); }
+    /// <summary>
+    /// 잡기 수정키. <b>항상 Ctrl 을 포함</b>한다 — 이 키를 누르고 있는 동안에만 공이 클릭을 받고,
+    /// 그 외에는 클릭이 공을 통과해 뒤에 있는 아이콘·버튼을 정상적으로 누를 수 있다.
+    /// (예전에는 맨 좌클릭으로 잡혀서, 공이 지나가는 자리를 아무것도 선택할 수 없었다.)
+    /// </summary>
+    private int _catchHotkeyMod = ModCtrl;
+    public int CatchHotkeyMod
+    {
+        // Ctrl 을 빼려 해도 다시 넣는다. 빼면 공이 다시 모든 클릭을 가로챈다.
+        get => _catchHotkeyMod | ModCtrl;
+        set => Set(ref _catchHotkeyMod, value | ModCtrl);
+    }
+
+    /// <summary>Win32 수정자 비트(RegisterHotKey 규격).</summary>
+    public const int ModAlt = 1, ModCtrl = 2, ModShift = 4, ModWin = 8;
 
     /// <summary>잡기 단축키 가상키 코드(키보드). 0이면 키보드 트리거 없음. 기본 'G'(0x47).</summary>
     private int _catchHotkeyVk = 0x47;
     public int CatchHotkeyVk { get => _catchHotkeyVk; set => Set(ref _catchHotkeyVk, value); }
 
     /// <summary>잡기 단축키 마우스 버튼 트리거. 0=없음, 1=좌, 2=우, 3=중앙. (수정자와 조합)</summary>
-    private int _catchHotkeyMouse;
+    /// <summary>잡기 마우스 버튼. 기본 좌클릭(수정키와 함께 눌러야 동작).</summary>
+    private int _catchHotkeyMouse = 1;
     public int CatchHotkeyMouse { get => _catchHotkeyMouse; set => Set(ref _catchHotkeyMouse, value); }
+
+    /// <summary>
+    /// 잡기와 숨기기가 같은 조합인가. 같으면 한 번의 입력이 두 동작을 함께 일으켜
+    /// 공을 잡자마자 사라지는 식으로 꼬인다.
+    /// </summary>
+    [JsonIgnore]
+    public bool HotkeysConflict =>
+        (CatchHotkeyVk != 0 && CatchHotkeyVk == HideHotkeyVk && CatchHotkeyMod == HideHotkeyMod)
+        || (CatchHotkeyMouse != 0 && CatchHotkeyMouse == HideHotkeyMouse && CatchHotkeyMod == HideHotkeyMod);
 
     /// <summary>
     /// 농구공 조준 단축키 가상키(누른 상태로 공을 뒤로 끌면 포물선 유도선 → 떼면 발사).
