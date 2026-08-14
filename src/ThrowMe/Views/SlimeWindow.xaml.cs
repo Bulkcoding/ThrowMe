@@ -760,6 +760,7 @@ public partial class SlimeWindow : Window
         {
             case ReleaseAction.Throw:
                 CloseBallIfOpen(); // 던지면 열린 볼은 닫힘
+                NotifyIfPaused();  // 일시 정지 중이면 왜 안 날아가는지 알려 준다
                 if (_settings.ThrowMode)
                 {
                     Vector2 throwV = _tracker.ComputeThrowVelocity(Now);
@@ -803,6 +804,32 @@ public partial class SlimeWindow : Window
     private void CloseBallIfOpen()
     {
         if (SkinHost.Content is ISkinClickEffect b && b.IsOpen) b.SetOpen(false);
+    }
+
+    /// <summary>마지막으로 "일시 정지 중" 토스트를 띄운 시각(초). 연달아 던져도 도배되지 않게.
+    /// 0 으로 두면 <see cref="Now"/> 가 앱 시작 기준이라 켜자마자 던진 첫 번째가 묻힌다.</summary>
+    private double _pausedToastAt = double.NegativeInfinity;
+    private const double PausedToastInterval = 5.0;
+
+    /// <summary>
+    /// 일시 정지 중에 던지면 왜 안 날아가는지 알려 준다.
+    ///
+    /// 일시 정지는 물리 갱신을 통째로 건너뛰는데, 드래그는 그보다 먼저 처리되어 <b>끌리기는 한다</b>.
+    /// 그래서 사용자 눈에는 "잡히는데 놓으면 그 자리에 멈추는" 고장으로 보인다. 실제로 그렇게 접수된
+    /// 문의가 있었다. 화면에 안내가 없으면 알아낼 방법이 사실상 없으므로 토스트로 짚어 준다.
+    ///
+    /// `알림 표시`(ShowToasts) 설정과 무관하게 띄운다 — 그 설정은 "공이 다른 PC로 넘어갔다"는
+    /// 알림용이고, 이건 지금 조작이 왜 먹히지 않는지에 대한 답이라 꺼 두면 다시 헤매게 된다.
+    /// </summary>
+    private void NotifyIfPaused()
+    {
+        if (!_settings.Paused) return;
+        double now = Now;
+        if (now - _pausedToastAt < PausedToastInterval) return;
+        _pausedToastAt = now;
+
+        ToastWindow.Show("일시 정지 중이에요",
+            "그래서 놓아도 날아가지 않아요. 설정 → 일반, 또는 트레이 메뉴에서 끌 수 있습니다.");
     }
 
     private enum ReleaseAction { Throw, CatchHold, Click, Deflect }
