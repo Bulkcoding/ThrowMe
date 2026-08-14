@@ -501,6 +501,11 @@ public partial class SlimeWindow : Window
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // 잡기는 수정키(기본 Ctrl)와 함께 눌러야 한다. 그냥 좌클릭으로 잡히면
+        // 공이 놓인 자리를 지나칠 때마다 의도치 않게 끌려다녔다.
+        // 수정키를 지정하지 않은 경우(0)에는 예전처럼 맨 좌클릭으로 잡는다.
+        if (_settings.CatchHotkeyMod != 0 && !ModifiersHeld(_settings.CatchHotkeyMod)) return;
+
         var c = CursorPhysical();
         if (IsCueMode)
         {

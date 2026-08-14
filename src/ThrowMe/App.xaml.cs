@@ -108,6 +108,9 @@ public partial class App : Application
         _store = new SettingsStore();
         _settings = _store.Load();
 
+        // 잡기를 Ctrl + 좌클릭으로 한 번 맞춘다(예전 설정 파일 대응).
+        _settings.MigrateCatchHotkeyOnce();
+
         _monitorService = new MonitorLayoutService();
 
         _slimeWindow = new SlimeWindow(_settings, _monitorService);

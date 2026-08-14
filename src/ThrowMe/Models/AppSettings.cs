@@ -146,17 +146,43 @@ public sealed class AppSettings : INotifyPropertyChanged
     public double CatchExtraPx { get; set; } = 85.0;
 
     // ── 잡기 단축키(전역) ───────────────────────────────────
-    /// <summary>잡기 단축키 수정자(Win32: ALT=1,CTRL=2,SHIFT=4,WIN=8 조합). 기본 CTRL+SHIFT.</summary>
-    private int _catchHotkeyMod = 2 | 4;
+    /// <summary>Win32 수정자 비트(RegisterHotKey 규격).</summary>
+    public const int ModAlt = 1, ModCtrl = 2, ModShift = 4, ModWin = 8;
+
+    /// <summary>
+    /// 잡기 단축키 수정자(Win32: ALT=1,CTRL=2,SHIFT=4,WIN=8 조합). 기본 <b>Ctrl</b>.
+    /// 이 키를 누른 채로 눌러야 공이 잡힌다 — 맨 좌클릭으로 잡히면 공이 놓인 자리를
+    /// 지나칠 때마다 의도치 않게 끌려다닌다.
+    /// </summary>
+    private int _catchHotkeyMod = ModCtrl;
     public int CatchHotkeyMod { get => _catchHotkeyMod; set => Set(ref _catchHotkeyMod, value); }
 
     /// <summary>잡기 단축키 가상키 코드(키보드). 0이면 키보드 트리거 없음. 기본 'G'(0x47).</summary>
     private int _catchHotkeyVk = 0x47;
     public int CatchHotkeyVk { get => _catchHotkeyVk; set => Set(ref _catchHotkeyVk, value); }
 
-    /// <summary>잡기 단축키 마우스 버튼 트리거. 0=없음, 1=좌, 2=우, 3=중앙. (수정자와 조합)</summary>
-    private int _catchHotkeyMouse;
+    /// <summary>잡기 단축키 마우스 버튼 트리거. 0=없음, 1=좌, 2=우, 3=중앙. (수정자와 조합). 기본 좌클릭.</summary>
+    private int _catchHotkeyMouse = 1;
     public int CatchHotkeyMouse { get => _catchHotkeyMouse; set => Set(ref _catchHotkeyMouse, value); }
+
+    /// <summary>
+    /// 잡기 단축키를 새 기본값(Ctrl + 좌클릭)으로 한 번만 초기화했는가.
+    /// 예전 설정 파일에는 수정자 없이 저장돼 있어, 그대로 두면 계속 맨 좌클릭으로 잡힌다.
+    /// </summary>
+    public bool CatchHotkeyResetToCtrl { get; set; }
+
+    /// <summary>
+    /// 예전 설정을 새 기본값으로 한 번 맞춘다(이미 했으면 아무것도 하지 않는다).
+    /// 사용자가 그 뒤에 바꾼 값은 다시 건드리지 않는다.
+    /// </summary>
+    public void MigrateCatchHotkeyOnce()
+    {
+        if (CatchHotkeyResetToCtrl) return;
+        CatchHotkeyResetToCtrl = true;
+
+        CatchHotkeyMod = ModCtrl;   // Ctrl
+        CatchHotkeyMouse = 1;       // 좌클릭
+    }
 
     /// <summary>
     /// 농구공 조준 단축키 가상키(누른 상태로 공을 뒤로 끌면 포물선 유도선 → 떼면 발사).
