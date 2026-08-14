@@ -61,6 +61,32 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// 슬라이더 최솟값이 <see cref="MinThrowPower"/> 이므로 그보다 작은 값(0·음수·NaN)은
     /// 손상으로 보고 기본값으로 되돌린다. 정상 값은 건드리지 않는다.
     /// </summary>
+    /// <summary>
+    /// 모든 설정을 기본값으로 되돌린다(설정 → 일반 → `설정 초기화`).
+    ///
+    /// 속성을 하나씩 나열하지 않고 <b>기본값 인스턴스에서 통째로 복사</b>한다 —
+    /// 나중에 설정이 추가돼도 여기를 고치지 않아도 함께 초기화된다.
+    /// 각 대입이 <see cref="PropertyChanged"/> 를 타므로 창과 슬라임에 즉시 반영되고,
+    /// 자동 저장으로 파일에도 곧바로 기록된다.
+    ///
+    /// 이 클래스가 갖고 있지 않은 것은 지우지 않는다 — 방 코드·비밀번호(relay.json)와
+    /// 직접 그린 그림 파일(skins/*.png)은 그대로 남는다. 그림을 쓰던 설정만 풀린다.
+    /// </summary>
+    public void ResetToDefaults()
+    {
+        var defaults = new AppSettings();
+        foreach (var p in typeof(AppSettings).GetProperties(
+                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            if (!p.CanRead || !p.CanWrite || p.GetIndexParameters().Length > 0) continue;
+            p.SetValue(this, p.GetValue(defaults));
+        }
+
+        // Dictionary 는 통째로 갈아 끼워도 자동 통보되지 않는다.
+        NotifySkinImagesChanged();
+        Services.Logger.Info("Settings reset to defaults by user.");
+    }
+
     /// <returns>고친 값이 있으면 true(호출한 쪽에서 즉시 저장해 파일까지 낫게 한다).</returns>
     public bool RepairInvalidValues()
     {

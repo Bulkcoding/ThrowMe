@@ -271,6 +271,39 @@ public partial class SettingsWindow : Window
 
     private void OnResetPosition(object sender, RoutedEventArgs e) => _slime.ResetPositionPublic();
 
+    /// <summary>
+    /// 모든 설정을 기본값으로. 되돌릴 수 없으므로 먼저 확인을 받는다.
+    /// 초기화 뒤에는 공 위치까지 맞춰 주고, 화면(설정창)도 새 값으로 다시 그린다.
+    /// </summary>
+    private void OnResetSettings(object sender, RoutedEventArgs e)
+    {
+        var answer = MessageBox.Show(
+            this,
+            "모든 설정을 기본값으로 되돌립니다.\n\n" +
+            "테마 · 물리(크기·반발·말랑함·던지기) · 소리 · 단축키 · 동작이 처음 상태가 됩니다.\n" +
+            "방 코드와 비밀번호, 직접 그린 그림 파일은 지워지지 않습니다.\n\n" +
+            "계속할까요?",
+            "설정 초기화",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel);
+
+        if (answer != MessageBoxResult.OK) return;
+
+        _settings.ResetToDefaults();
+        _slime.ResetPositionPublic();   // 크기가 바뀌므로 공도 제자리로
+
+        // 코드로 그려 둔 부분은 바인딩이 없어 따로 새로 그린다.
+        BuildThemeCards();
+        UpdateRebindText();
+        UpdateAimKeyText();
+        UpdateBilliardSection();
+        UpdateCustomImageSection();
+
+        MessageBox.Show(this, "설정을 기본값으로 되돌렸습니다.", "설정 초기화",
+            MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
 
     private void UpdateBilliardSection()
         => BilliardSection.Visibility = _settings.Skin == SlimeSkinKind.Billiard ? Visibility.Visible : Visibility.Collapsed;
