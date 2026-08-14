@@ -128,6 +128,9 @@ public partial class App : Application
         // 방금 업데이트가 적용됐다면 노트를 설정에서 볼 수 있게 보관만 한다(팝업 없음).
         StashAppliedNotes();
 
+        // 버전이 바뀌었으면 바로가기 아이콘이 옛 그림으로 남지 않게 셸 캐시를 갱신한다.
+        RefreshIconCacheIfVersionChanged();
+
         // 새 버전이 있으면 묻지 않고 진행바만 띄워 받고, 적용 후 자동 재시작.
         _ = RunStartupUpdateAsync();
 
@@ -199,6 +202,35 @@ public partial class App : Application
         catch (Exception ex)
         {
             Logger.Error("Release notes stash failed.", ex);
+        }
+    }
+
+    /// <summary>
+    /// 실행된 버전이 지난번과 다르면 탐색기 아이콘 캐시를 갱신한다.
+    ///
+    /// 업데이트는 exe 를 같은 경로에 덮어쓰므로, 바로가기의 경로·아이콘 인덱스가 그대로다.
+    /// 셸은 바뀔 이유가 없다고 보고 캐시된 옛 아이콘을 계속 써서, 아이콘을 바꿔 배포해도
+    /// 바탕화면 바로가기만 예전 그림으로 남았다. 버전이 바뀐 첫 실행에만 한 번 알린다.
+    /// </summary>
+    private void RefreshIconCacheIfVersionChanged()
+    {
+        if (_settings == null) return;
+        try
+        {
+            string current = UpdateService.Current.ToString(3);
+            if (_settings.LastRunVersion == current) return;
+
+            // 첫 실행(기록 없음)에도 한 번 돌려 둔다 — 새로 받아 온 경우가 대부분이라 해될 것이 없다.
+            string? exe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            ShellIconRefresh.Refresh(exe);
+
+            _settings.LastRunVersion = current;
+            _store?.Save(_settings); // 다음 실행에서 또 돌지 않게 즉시 기록
+            Logger.Info($"Icon cache refreshed for v{current}.");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Icon cache refresh check failed.", ex);
         }
     }
 

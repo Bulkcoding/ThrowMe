@@ -242,6 +242,12 @@ public sealed class AppSettings : INotifyPropertyChanged
     //   업데이트는 이제 묻지 않는다 — 켤 때 새 버전이 있으면 진행바만 띄우고 적용 후 자동 재시작.
     //   변경 내용은 설정 → 일반 → "최근 변경 내용 보기" 로 언제든 확인한다.
 
+    /// <summary>
+    /// 마지막으로 실행된 버전. 지금 버전과 다르면 방금 업데이트된 것으로 보고
+    /// 탐색기 아이콘 캐시를 갱신한다(바로가기가 옛 아이콘으로 남는 문제).
+    /// </summary>
+    public string LastRunVersion { get; set; } = "";
+
     /// <summary>작업표시줄에 ThrowMe 를 표시할지(Alt+Tab 에도 함께 나온다).</summary>
     private bool _showInTaskbar = true;
     public bool ShowInTaskbar { get => _showInTaskbar; set => Set(ref _showInTaskbar, value); }
