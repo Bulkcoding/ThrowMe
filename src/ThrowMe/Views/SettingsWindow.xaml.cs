@@ -53,6 +53,7 @@ public partial class SettingsWindow : Window
         BuildThemeCards();
         UpdateRebindText();
         UpdateAimKeyText();
+        UpdateWindKeyText();
         UpdateBilliardSection();
         UpdateCustomImageSection();
         _settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -284,6 +285,7 @@ public partial class SettingsWindow : Window
         (SlimeSkinKind.Master, "마스터볼"),
         (SlimeSkinKind.Basketball, "농구공"),
         (SlimeSkinKind.Bowling, "볼링공"),
+        (SlimeSkinKind.PaperPlane, "종이비행기"),
     };
 
     private void BuildThemeCards()
@@ -337,6 +339,7 @@ public partial class SettingsWindow : Window
         SlimeSkinKind.Pokeball or SlimeSkinKind.Ultra or SlimeSkinKind.Master => new BallSkin(kind),
         SlimeSkinKind.Basketball => new BasketballSkin(),
         SlimeSkinKind.Bowling => new BowlingSkin(),
+        SlimeSkinKind.PaperPlane => new PaperPlaneSkin(),
         _ => new JellySkin(),
     };
 
@@ -526,8 +529,36 @@ public partial class SettingsWindow : Window
             ? "(없음)"
             : KeyInterop.KeyFromVirtualKey(_settings.BasketballAimVk).ToString();
 
+    // ── 종이비행기 바람 단축키(Ctrl 고정 + 키 1개, 즉시 적용) ──
+    private bool _capturingWindKey;
+
+    private void OnRebindWindKey(object sender, RoutedEventArgs e)
+    {
+        _capturingWindKey = true;
+        WindKeyBtn.Content = "키 입력…";
+    }
+
+    private void UpdateWindKeyText()
+        => WindKeyBtn.Content = _settings.WindHotkeyVk == 0
+            ? "(없음)"
+            : KeyDisplayName(_settings.WindHotkeyVk);
+
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (_capturingWindKey)
+        {
+            Key wk = e.Key == Key.System ? e.SystemKey : e.Key;
+            // 수정자는 Ctrl 고정이므로 수정자 단독 입력은 무시하고 계속 기다린다.
+            if (wk is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
+                or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin) return;
+
+            _settings.WindHotkeyVk = KeyInterop.VirtualKeyFromKey(wk);
+            _capturingWindKey = false;
+            UpdateWindKeyText();
+            e.Handled = true;
+            return;
+        }
+
         if (_capturingAimKey)
         {
             Key k = e.Key == Key.System ? e.SystemKey : e.Key;

@@ -50,6 +50,13 @@ public sealed class AppSettings : INotifyPropertyChanged
     private double _throwPower = 1.0;
     public double ThrowPower { get => _throwPower; set => Set(ref _throwPower, value); }
 
+    /// <summary>
+    /// 종이비행기 테마로 바꾸기 직전의 던지기 가중치. 종이비행기는 가중치를 최소로 쓰기 때문에,
+    /// 다른 테마로 돌아갈 때 이 값으로 되돌린다. 0 이하 = 되돌릴 값 없음(지금 종이비행기가 아니다).
+    /// 앱을 종이비행기 상태로 끄고 다시 켜도 잃지 않도록 설정에 함께 저장한다.
+    /// </summary>
+    public double ThrowPowerBeforePaperPlane { get; set; }
+
     /// <summary>이 속도(px/s) 미만이면 완전히 정지시켜 저속 진동을 막는다.</summary>
     public double StopThreshold { get; set; } = 20.0;
 
@@ -169,6 +176,14 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// <summary>숨기기 단축키 마우스 버튼 트리거. 0=없음, 1=좌, 2=우, 3=중앙. (수정자와 조합)</summary>
     private int _hideHotkeyMouse;
     public int HideHotkeyMouse { get => _hideHotkeyMouse; set => Set(ref _hideHotkeyMouse, value); }
+
+    /// <summary>
+    /// 종이비행기 바람 단축키의 키 1개(가상키). 수정자는 <c>Ctrl</c> 고정이라 저장하지 않는다.
+    /// 기본 Space(0x20) → 표시는 "Ctrl + Space". 0이면 바람 단축키 사용 안 함.
+    /// 활공 중에만 전역 등록되므로, 평소에는 다른 앱이 이 조합을 그대로 쓴다.
+    /// </summary>
+    private int _windHotkeyVk = 0x20;
+    public int WindHotkeyVk { get => _windHotkeyVk; set => Set(ref _windHotkeyVk, value); }
 
     /// <summary>효과음 사용(Phase 4).</summary>
     private bool _soundEnabled = true;

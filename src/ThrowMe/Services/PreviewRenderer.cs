@@ -40,6 +40,17 @@ internal static class PreviewRenderer
         Save(Wrap(new PinSkin(), 320), 320, 320, Path.Combine(outDir, "bowling_pin.png"));
         SaveBowlingLane(Path.Combine(outDir, "bowling_lane.png"));
         SaveBowlingScoreboard(Path.Combine(outDir, "bowling_scoreboard.png"));
+        // 종이비행기 스킨: 오른쪽 비행 / 왼쪽 비행(뒤집힘) / 구겨짐
+        Save(Wrap(new PaperPlaneSkin(), 320), 320, 320, Path.Combine(outDir, "paperplane.png"));
+        var planeLeft = new PaperPlaneSkin();
+        planeLeft.SetHeading(170);   // 왼쪽으로 살짝 내려가며 비행
+        Save(Wrap(planeLeft, 320), 320, 320, Path.Combine(outDir, "paperplane_left.png"));
+        var planeRight = new PaperPlaneSkin();
+        planeRight.SetHeading(-10);  // 오른쪽으로 살짝 올라가며 비행
+        Save(Wrap(planeRight, 320), 320, 320, Path.Combine(outDir, "paperplane_right.png"));
+        var planeCrumpled = new PaperPlaneSkin();
+        planeCrumpled.SetCrumpled(true);
+        Save(Wrap(planeCrumpled, 320), 320, 320, Path.Combine(outDir, "paperplane_crumpled.png"));
     }
 
     private static void SaveBowlingScoreboard(string path)

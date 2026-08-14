@@ -256,6 +256,7 @@ public partial class SlimeWindow : Window
             {
                 case CatchHotkeyId: CatchToCursor(); handled = true; break;
                 case HideHotkeyId: ToggleQuickHide(); handled = true; break;
+                case WindHotkeyId: BlowWindUnderPlane(); handled = true; break; // 종이비행기 바람
             }
         }
         return IntPtr.Zero;
@@ -290,6 +291,8 @@ public partial class SlimeWindow : Window
         if (show) { _overlay?.Show(); _hitTextOverlay?.Show(); }
         else { _overlay?.Hide(); _hitTextOverlay?.Hide(); }
 
+        UpdateWindHotkey(); // 숨기면 종이비행기 바람 단축키도 즉시 놓아준다
+
         if (show) EnsureRendering();
     }
 
@@ -306,6 +309,7 @@ public partial class SlimeWindow : Window
         _physics.SurfaceSpin = 0;
         _dragSpin = 0;
         _physics.SetPositionClamped(cursor - new Vector2(half, half));
+        UncrumplePaperPlane(); // 커서로 회수한 종이비행기는 펴진 상태로 돌려준다
         if (BowlingOn) { _ballGutterSide = 0; ClampBallForPlacement(); }
         _animation.OnImpact(_settings.ImpactReferenceSpeed * 0.25); // 잡히는 작은 반응
         ApplyWindowPosition();
@@ -380,9 +384,13 @@ public partial class SlimeWindow : Window
             _animation.Rigid = _settings.Skin != SlimeSkinKind.Jelly; // 젤리만 말랑, 나머지는 단단
 
         bool basketball = _settings.Skin == SlimeSkinKind.Basketball;
-        _physics.GravityY = basketball ? BasketballGravity : 0.0;
+        bool paperPlane = _settings.Skin == SlimeSkinKind.PaperPlane;
+        _physics.GravityY = basketball ? BasketballGravity
+                          : paperPlane ? PaperGravity   // 종이답게 농구공보다 작은 중력
+                          : 0.0;
         // 중력으로 즉시 낙하하도록 렌더 루프를 깨운다(초기화 완료 후에만; _animation 준비 뒤).
         if (basketball && _animation != null) EnsureRendering();
+        if (_animation != null) ApplyPaperPlaneBehavior(); // 종이비행기 전용 물리·표시(다른 테마면 되돌림)
     }
 
     // 창 이동은 매 프레임 일어나는 가장 비싼 작업이다. AllowsTransparency(레이어드) 창에서
@@ -615,6 +623,7 @@ public partial class SlimeWindow : Window
     private void BeginGrab(Vector2 cursor)
     {
         _isDragging = true;
+        UncrumplePaperPlane(); // 구겨진 종이비행기를 집어 들면 다시 펴 준다
         _hasPrevBallY = false; // 잡는 동안 위치 점프 → 득점 오검출 방지
         _pressCursor = cursor;
         _dragOffset = cursor - _physics.Position;
@@ -706,9 +715,10 @@ public partial class SlimeWindow : Window
 
         // 드래그 곡선(curl)으로 스핀을 "충전"한다(관성). 한 방향으로 계속 돌리면
         // 스핀이 쌓여 유지되고, 직선 구간에서도 급히 사라지지 않는다.
+        // 종이비행기는 굴러가는 스핀이 없으므로 충전하지 않는다.
         double dtm = now - _lastDragTime;
         Vector2 delta = cursor - _lastDragCursor;
-        if (dtm > 1e-4 && delta.Length > 1.0)
+        if (!PaperPlaneOn && dtm > 1e-4 && delta.Length > 1.0)
         {
             Vector2 dir = delta.Normalized();
             if (_prevDragDir.LengthSquared > 1e-6)
@@ -761,6 +771,8 @@ public partial class SlimeWindow : Window
                             throwV /= throwPower;
                         throwV = (throwV * BasketballThrowScale).ClampLength(BasketballMaxThrow);
                     }
+                    // 종이비행기: 공처럼 세게 날아가지 않도록 속도를 눌러 준다.
+                    if (PaperPlaneOn) throwV = ClampPaperThrow(throwV);
                     _physics.Velocity = throwV;
                 }
                 // 볼링: 기름칠 레인 보정(최소 속도 + 항상 전진)
@@ -882,6 +894,8 @@ public partial class SlimeWindow : Window
             return;
         }
 
+        if (PaperPlaneOn) TickPaperPlaneAero(dt); // 종이비행기: 양력·흔들림·마우스 바람
+
         PhysicsStepResult r = _physics.Update(dt);
         if (r.Collided)
         {
@@ -891,6 +905,8 @@ public partial class SlimeWindow : Window
                 _dizzyUntil = now + DizzyDurationSeconds;
             // 농구공: 벽에 튈 때마다 씸 무늬 변경
             (SkinHost.Content as ISkinBounce)?.OnBounce();
+            // 종이비행기: 튕기지 않고 구겨진다
+            if (PaperPlaneOn) OnPaperPlaneCollided(r.MaxImpactSpeed);
         }
 
         ResolveHoopCollisions();
@@ -906,6 +922,7 @@ public partial class SlimeWindow : Window
         ApplyWindowPosition();
         _animation.Tick(dt, _physics.Velocity, _physics.SpinAngle);
         UpdateSkinRoll(dt);
+        if (PaperPlaneOn) TickPaperPlaneVisual(dt); // 종이비행기: 자세(좌우·기수) + 구겨짐 복구
         UpdateSpinFx();
 
         // 표정: 어질(충돌 직후) > 신남(빠름) > 평상
@@ -915,7 +932,9 @@ public partial class SlimeWindow : Window
             : SlimeExpression.Normal);
 
         // 완전히 멈추고 형태도 안정되고 파티클도 없고 표정도 원상복귀되면 루프 정지(유휴).
-        if (r.Sleeping && _animation.IsResting && !particlesAlive && !hitTextAlive && !netsAlive && now >= _dizzyUntil)
+        // 구겨진 종이비행기는 바닥에서 펴져야 하므로 그때까진 루프를 유지한다.
+        if (r.Sleeping && _animation.IsResting && !particlesAlive && !hitTextAlive && !netsAlive
+            && now >= _dizzyUntil && PaperSkin?.IsCrumpled != true)
             StopRendering();
     }
 
@@ -1052,6 +1071,10 @@ public partial class SlimeWindow : Window
             case nameof(AppSettings.HideHotkeyMouse):
                 RegisterHotkeys();
                 break;
+            case nameof(AppSettings.WindHotkeyVk):
+                UnregisterWindHotkey(); // 새 키로 다시 잡도록 먼저 놓아준다
+                UpdateWindHotkey();
+                break;
             case nameof(AppSettings.SlimeSize):
                 ApplyWindowSize();
                 if (!_physics.IsCurrentPositionValid())
@@ -1075,6 +1098,7 @@ public partial class SlimeWindow : Window
                 => new BallSkin(_settings.Skin),
             SlimeSkinKind.Basketball => new BasketballSkin(),
             SlimeSkinKind.Bowling => new BowlingSkin(),
+            SlimeSkinKind.PaperPlane => new PaperPlaneSkin(),
             _ => new JellySkin(),
         };
         _expression = SlimeExpression.Normal; // 새 스킨은 기본 표정으로 시작
@@ -3099,6 +3123,7 @@ public partial class SlimeWindow : Window
         {
             UnregisterHotKey(_hwnd, CatchHotkeyId);
             UnregisterHotKey(_hwnd, HideHotkeyId);
+            UnregisterHotKey(_hwnd, WindHotkeyId); // 종이비행기 바람(활공 중에만 잡고 있던 것)
         }
         RemoveMouseTrigger();
         _hwndSource?.RemoveHook(WndProc);
