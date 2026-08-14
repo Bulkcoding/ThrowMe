@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -587,7 +587,7 @@ public partial class SlimeWindow : Window
         double dist = toBall.Length;
         Vector2 dir = dist > 1e-3 ? toBall / dist : new Vector2(1, 0);
         double pull = Math.Max(0, dist - _settings.SlimeSize * 0.44);
-        double power = Math.Min(pull * _settings.CuePowerScale, _settings.MaxThrowSpeed);
+        double power = Math.Min(pull * _settings.CuePowerScale, _settings.EffectiveMaxThrowSpeed);
         return (dir, power);
     }
 
@@ -598,7 +598,7 @@ public partial class SlimeWindow : Window
         double radius = _settings.SlimeSize * 0.44;
         var (dir, power) = AimParams(cursor);
         double pull = Math.Max(0, (ballCenter - cursor).Length - radius);
-        _aimOverlay?.UpdateAim(ballCenter, cursor, dir, Math.Clamp(power / _settings.MaxThrowSpeed, 0, 1), radius, pull);
+        _aimOverlay?.UpdateAim(ballCenter, cursor, dir, Math.Clamp(power / _settings.EffectiveMaxThrowSpeed, 0, 1), radius, pull);
     }
 
     private void ReleaseAim(Vector2 cursor)
@@ -770,7 +770,8 @@ public partial class SlimeWindow : Window
                         double throwPower = _settings.ThrowPower;
                         if (throwPower > 0.01 && Math.Abs(throwPower - 1.0) > 0.01)
                             throwV /= throwPower;
-                        throwV = (throwV * BasketballThrowScale).ClampLength(BasketballMaxThrow);
+                        throwV = (throwV * BasketballThrowScale)
+                            .ClampLength(BasketballMaxThrow * _settings.SpeedLimitScale);
                     }
                     // 종이비행기: 공처럼 세게 날아가지 않도록 속도를 눌러 준다.
                     if (PaperPlaneOn) throwV = ClampPaperThrow(throwV);
@@ -860,7 +861,7 @@ public partial class SlimeWindow : Window
         if (dir.LengthSquared < 1e-6) dir = new Vector2(0, -1); // 정확히 중앙을 눌렀으면 위로
 
         double speed = Math.Max(incomingSpeed, _settings.PunchImpulse);
-        _physics.Velocity = dir * Math.Min(speed, _settings.MaxSpeed);
+        _physics.Velocity = dir * Math.Min(speed, _settings.EffectiveMaxSpeed);
 
         // 맞은 세기는 들어온 속도 기준 — 빠른 공을 되치면 더 크게 반응한다.
         double intensity = Math.Clamp(incomingSpeed / _settings.ImpactReferenceSpeed, 0.25, 1.0);

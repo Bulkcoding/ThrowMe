@@ -54,6 +54,32 @@ public sealed class AppSettings : INotifyPropertyChanged
     public const double MinThrowPower = 0.3;
 
     /// <summary>
+    /// 속도 상한 배율. 던지기 가중치를 아무리 올려도 <see cref="MaxSpeed"/>·<see cref="MaxThrowSpeed"/>
+    /// 에서 잘리기 때문에 어느 지점부터는 더 세게 던져도 똑같아진다. 이 배율이 그 천장을 올린다.
+    /// 테마별 상한(종이비행기·농구공)에도 함께 곱해져, 어떤 테마에서든 슬라이더가 먹는다.
+    /// </summary>
+    private double _speedLimitScale = 1.0;
+    public double SpeedLimitScale { get => _speedLimitScale; set => Set(ref _speedLimitScale, value); }
+
+    /// <summary>
+    /// 감속 배율. 날아가는 공이 느려지는 정도(<see cref="Friction"/>)에 곱한다.
+    /// 낮출수록 속도를 오래 유지해 멀리 날아가고, 높이면 금방 멈춘다.
+    /// 엔진의 <c>EffFriction</c> 한 곳에서 곱하므로 테마·골대·볼링의 마찰 오버라이드에도 그대로 적용된다.
+    /// </summary>
+    private double _slowdownScale = 1.0;
+    public double SlowdownScale { get => _slowdownScale; set => Set(ref _slowdownScale, value); }
+
+    /// <summary>슬라이더 범위(= UI Minimum/Maximum). 이 밖의 값은 손상으로 보고 되돌린다.</summary>
+    public const double MinSpeedLimitScale = 0.25, MaxSpeedLimitScale = 4.0;
+    public const double MinSlowdownScale = 0.2, MaxSlowdownScale = 3.0;
+
+    /// <summary>배율까지 반영한 실제 속도 상한. 코드에서는 항상 이 값을 쓴다.</summary>
+    [JsonIgnore] public double EffectiveMaxSpeed => MaxSpeed * SpeedLimitScale;
+
+    /// <summary>배율까지 반영한 실제 던지기 속도 상한.</summary>
+    [JsonIgnore] public double EffectiveMaxThrowSpeed => MaxThrowSpeed * SpeedLimitScale;
+
+    /// <summary>
     /// 설정 파일에서 읽은 값 중 <b>UI 로는 나올 수 없는</b> 값을 되살린다.
     ///
     /// 던지기 가중치가 0 이 되면 던질 때 속도가 `마우스속도 × 0 = 0` 이라 공이 손을 떠나지 않고
@@ -105,6 +131,21 @@ public sealed class AppSettings : INotifyPropertyChanged
         if (double.IsNaN(ThrowPowerBeforePaperPlane) || ThrowPowerBeforePaperPlane < 0)
         {
             ThrowPowerBeforePaperPlane = 0;
+            repairedAny = true;
+        }
+
+        // 속도 상한 배율이 0 이면 공이 아예 못 움직인다(속도가 0 으로 잘린다).
+        // 감속 배율이 0 이면 영영 안 멈춘다. 둘 다 슬라이더 범위 밖은 손상으로 본다.
+        if (!(SpeedLimitScale >= MinSpeedLimitScale && SpeedLimitScale <= MaxSpeedLimitScale))
+        {
+            Services.Logger.Info($"Repaired invalid SpeedLimitScale ({SpeedLimitScale}) -> 1.0.");
+            SpeedLimitScale = 1.0;
+            repairedAny = true;
+        }
+        if (!(SlowdownScale >= MinSlowdownScale && SlowdownScale <= MaxSlowdownScale))
+        {
+            Services.Logger.Info($"Repaired invalid SlowdownScale ({SlowdownScale}) -> 1.0.");
+            SlowdownScale = 1.0;
             repairedAny = true;
         }
 

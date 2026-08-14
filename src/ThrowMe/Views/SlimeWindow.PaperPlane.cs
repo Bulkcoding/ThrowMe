@@ -66,9 +66,10 @@ public partial class SlimeWindow
     /// 실효 배율은 0.3 × 2.5 ≈ 0.75 — 슬라이더를 올리면 여전히 그만큼 더 세게 나간다.</summary>
     private const double PaperThrowScale = 2.5;
 
-    /// <summary>종이비행기 던지기: 배율을 곱한 뒤 상한으로 눌러 준다.</summary>
+    /// <summary>종이비행기 던지기: 배율을 곱한 뒤 상한으로 눌러 준다.
+    /// 테마 상한에도 사용자의 `최고 속도` 배율을 곱한다 — 안 그러면 이 테마에서만 슬라이더가 먹지 않는다.</summary>
     private Vector2 ClampPaperThrow(Vector2 throwVelocity)
-        => (throwVelocity * PaperThrowScale).ClampLength(PaperMaxThrow);
+        => (throwVelocity * PaperThrowScale).ClampLength(PaperMaxThrow * _settings.SpeedLimitScale);
 
     // ── 상태 ────────────────────────────────────────────────
     private double _paperHeadingDeg;      // 화면에 보여 주는 자세(부드럽게 따라간다)

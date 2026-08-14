@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using ThrowMe.Models;
 
 namespace ThrowMe.Physics;
@@ -68,7 +68,8 @@ public sealed class SlimePhysicsEngine
     public double? FrictionOverride { get; set; }
 
     private double EffRestitution => RestitutionOverride ?? _settings.Restitution;
-    private double EffFriction => FrictionOverride ?? _settings.Friction;
+    // 사용자의 감속 배율은 여기 한 곳에서 곱한다 — 테마·골대·볼링의 마찰 오버라이드에도 함께 걸린다.
+    private double EffFriction => (FrictionOverride ?? _settings.Friction) * _settings.SlowdownScale;
 
     /// <summary>현재 적용 중인 마찰(1/s). 조준 유도선이 실제 궤적과 같게 그리도록 노출.</summary>
     public double EffectiveFriction => EffFriction;
@@ -130,7 +131,7 @@ public sealed class SlimePhysicsEngine
         }
 
         // 2) 최대 속도 제한
-        Velocity = Velocity.ClampLength(_settings.MaxSpeed);
+        Velocity = Velocity.ClampLength(_settings.EffectiveMaxSpeed);
 
         // 3) 터널링 방지: 이동량이 크면 substep 분할
         double travel = Velocity.Length * dt;

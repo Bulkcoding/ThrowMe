@@ -1,4 +1,4 @@
-using ThrowMe.Models;
+﻿using ThrowMe.Models;
 using ThrowMe.Physics;
 
 namespace ThrowMe.Services;
@@ -92,6 +92,6 @@ public sealed class ThrowInputTracker
             return Vector2.Zero;
 
         Vector2 velocity = (newest.Position - oldest.Position) / dt * _settings.ThrowPower;
-        return velocity.ClampLength(_settings.MaxThrowSpeed);
+        return velocity.ClampLength(_settings.EffectiveMaxThrowSpeed);
     }
 }
