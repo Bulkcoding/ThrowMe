@@ -1929,7 +1929,11 @@ public partial class SlimeWindow : Window
             if (Enum.TryParse<SlimeSkinKind>(d.Skin, ignoreCase: true, out var skin))
                 _settings.Skin = skin;
 
-            _settings.ThrowPower = d.ThrowPower;
+            // 던지기 가중치는 0 이면 던지기가 죽는다(속도 = 마우스속도 × 0). 슬라이더 최솟값이
+            // 0.3 이라 그보다 작은 값은 방장이 보낼 수 없는 값 — 필드가 빠진 메시지로 보고 무시한다.
+            // (SlimeSize·SkinImageScale 도 같은 이유로 원래부터 > 0 일 때만 받는다.)
+            if (d.ThrowPower >= AppSettings.MinThrowPower) _settings.ThrowPower = d.ThrowPower;
+            else Logger.Info($"Room style: ignoring invalid throwPower ({d.ThrowPower}).");
             _settings.Restitution = d.Restitution;
             _settings.Softness = d.Softness;
             if (d.SlimeSize > 0) _settings.SlimeSize = d.SlimeSize;

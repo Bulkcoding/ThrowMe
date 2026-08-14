@@ -47,6 +47,9 @@ public sealed class SettingsStore : IDisposable
                 var s = JsonSerializer.Deserialize<AppSettings>(json, _options);
                 if (s != null)
                 {
+                    // 손상된 값(예: 던지기 가중치 0)을 되살린다. 자동 저장은 아직 연결되기 전이라
+                    // 여기서 바로 저장해야 파일까지 낫는다(안 그러면 매 실행마다 같은 값을 다시 고친다).
+                    if (s.RepairInvalidValues()) Save(s);
                     Logger.Info("Settings loaded.");
                     return s;
                 }

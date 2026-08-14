@@ -50,6 +50,41 @@ public sealed class AppSettings : INotifyPropertyChanged
     private double _throwPower = 1.0;
     public double ThrowPower { get => _throwPower; set => Set(ref _throwPower, value); }
 
+    /// <summary>던지기 가중치의 최솟값(설정 슬라이더 Minimum 과 같다). 이보다 작은 값은 UI 로 만들 수 없다.</summary>
+    public const double MinThrowPower = 0.3;
+
+    /// <summary>
+    /// 설정 파일에서 읽은 값 중 <b>UI 로는 나올 수 없는</b> 값을 되살린다.
+    ///
+    /// 던지기 가중치가 0 이 되면 던질 때 속도가 `마우스속도 × 0 = 0` 이라 공이 손을 떠나지 않고
+    /// 놓은 자리에 그대로 멈춘다. 그 값이 파일에 저장되면 재시작해도 낫지 않는다.
+    /// 슬라이더 최솟값이 <see cref="MinThrowPower"/> 이므로 그보다 작은 값(0·음수·NaN)은
+    /// 손상으로 보고 기본값으로 되돌린다. 정상 값은 건드리지 않는다.
+    /// </summary>
+    /// <returns>고친 값이 있으면 true(호출한 쪽에서 즉시 저장해 파일까지 낫게 한다).</returns>
+    public bool RepairInvalidValues()
+    {
+        bool repairedAny = false;
+
+        if (!(ThrowPower >= MinThrowPower))
+        {
+            // 종이비행기는 원래 최솟값을 쓰므로 그 값으로, 나머지는 기본값(1.0)으로 되돌린다.
+            double repaired = Skin == SlimeSkinKind.PaperPlane ? MinThrowPower : 1.0;
+            Services.Logger.Info($"Repaired invalid ThrowPower ({ThrowPower}) -> {repaired}.");
+            ThrowPower = repaired;
+            repairedAny = true;
+        }
+
+        // 종이비행기 보관값: 0 이하 = "되돌릴 값 없음". NaN·음수만 정리한다.
+        if (double.IsNaN(ThrowPowerBeforePaperPlane) || ThrowPowerBeforePaperPlane < 0)
+        {
+            ThrowPowerBeforePaperPlane = 0;
+            repairedAny = true;
+        }
+
+        return repairedAny;
+    }
+
     /// <summary>
     /// 종이비행기 테마로 바꾸기 직전의 던지기 가중치. 종이비행기는 가중치를 최소로 쓰기 때문에,
     /// 다른 테마로 돌아갈 때 이 값으로 되돌린다. 0 이하 = 되돌릴 값 없음(지금 종이비행기가 아니다).
