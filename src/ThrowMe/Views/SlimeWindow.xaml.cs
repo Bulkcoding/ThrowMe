@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ThrowMe.Animation;
 using ThrowMe.Effects;
 using ThrowMe.Models;
@@ -93,6 +94,22 @@ public partial class SlimeWindow : Window
     /// <summary>릴레이 연결 상태 변화(설정창 표시용).</summary>
     public event Action<RelayState>? RelayStateChanged;
 
+    // ── 사용법 힌트(중간중간 토스트) ────────────────────────
+    private DispatcherTimer? _tipTimer;
+    private int _tipIndex;
+    /// <summary>힌트 표시 간격(약 3분).</summary>
+    private static readonly TimeSpan TipInterval = TimeSpan.FromMinutes(3);
+    /// <summary>순환하며 보여줄 사용법 힌트.</summary>
+    private static readonly string[] UsageTips =
+    {
+        "슬라임을 잡고 휙 던지면 화면을 가로질러 날아가요.",
+        "슬라임을 톡 클릭하면 콩! 하고 튕겨요.",
+        "설정에서 스킨을 바꿔 보세요 — 당구공·농구공·볼링·종이비행기까지 있어요.",
+        "여러 모니터를 쓰면 슬라임이 화면 사이를 자유롭게 넘어다녀요.",
+        "트레이 아이콘을 우클릭하면 일시정지·숨기기·설정을 열 수 있어요.",
+        "이 힌트가 번거로우면 설정 > 사용법 힌트에서 끌 수 있어요.",
+    };
+
     public SlimeWindow(AppSettings settings, MonitorLayoutService monitors)
     {
         _settings = settings;
@@ -153,7 +170,38 @@ public partial class SlimeWindow : Window
         // 릴레이 서버 연결 시작(설정돼 있을 때만). NAT/방화벽 무관(아웃바운드 WSS).
         _relay?.Start();
 
+        UpdateTipTimer(); // 사용법 힌트 순환 시작(설정이 켜져 있을 때만)
+
         // 시작은 정지 상태이므로 렌더 루프를 돌리지 않는다(CPU 절감).
+    }
+
+    // ── 사용법 힌트 ─────────────────────────────────────────
+    /// <summary>설정에 따라 힌트 타이머를 켜거나 끈다.</summary>
+    private void UpdateTipTimer()
+    {
+        if (_settings.ShowUsageTips)
+        {
+            if (_tipTimer == null)
+            {
+                _tipTimer = new DispatcherTimer { Interval = TipInterval };
+                _tipTimer.Tick += (_, _) => ShowNextTip();
+            }
+            _tipTimer.Start();
+        }
+        else
+        {
+            _tipTimer?.Stop();
+        }
+    }
+
+    /// <summary>다음 사용법 힌트를 토스트로 띄운다. 슬라임이 숨겨져 있으면 건너뛴다.</summary>
+    private void ShowNextTip()
+    {
+        if (!_settings.ShowUsageTips) return;
+        if (!_settings.SlimeVisible) return; // 숨긴 상태면 방해하지 않는다
+        string tip = UsageTips[_tipIndex % UsageTips.Length];
+        _tipIndex++;
+        ToastWindow.Show("사용법", tip);
     }
 
     // ── 전역 단축키(잡기 / 빠르게 숨기기) ───────────────────
@@ -959,6 +1007,9 @@ public partial class SlimeWindow : Window
             : _physics.Velocity.Length > _settings.ImpactReferenceSpeed * FlyingSpeedFraction ? SlimeExpression.Flying
             : SlimeExpression.Normal);
 
+        // 날아가는 동안 미뤄 둔 설정 변경(스킨·크기)을 멈춘 순간 반영한다.
+        if (_physics.IsAtRest) FlushDeferredSettings();
+
         // 완전히 멈추고 형태도 안정되고 파티클도 없고 표정도 원상복귀되면 루프 정지(유휴).
         // 구겨진 종이비행기는 바닥에서 펴져야 하므로 그때까진 루프를 유지한다.
         if (r.Sleeping && _animation.IsResting && !particlesAlive && !hitTextAlive && !netsAlive
@@ -1054,6 +1105,47 @@ public partial class SlimeWindow : Window
         nameof(AppSettings.SkinImageScale),
     };
 
+    /// <summary>날아가는 중에 바꾸면 비행이 끊겨 보이는 항목 — 정지할 때까지 적용을 미룬다.</summary>
+    private readonly HashSet<string> _deferredWhileFlying = new(StringComparer.Ordinal);
+
+    /// <summary>슬라임이 지금 날아가는 중인가(잡고 있지도, 멈춰 있지도 않은 상태).</summary>
+    private bool IsBallInFlight => !_isDragging && !_physics.IsAtRest;
+
+    /// <summary>비행 중이면 해당 항목을 보류 목록에 넣고 true 를 반환(지금은 적용하지 않음).</summary>
+    private bool DeferWhileFlying(string prop)
+    {
+        if (!IsBallInFlight) return false;
+        _deferredWhileFlying.Add(prop);
+        return true;
+    }
+
+    /// <summary>비행이 끝났을 때 보류해 둔 설정 변경을 한 번에 적용한다.</summary>
+    private void FlushDeferredSettings()
+    {
+        if (_deferredWhileFlying.Count == 0) return;
+        // 스킨을 먼저 반영해야 크기 재적용이 새 스킨 기준으로 맞는다.
+        if (_deferredWhileFlying.Contains(nameof(AppSettings.Skin))) ApplySkinChange();
+        if (_deferredWhileFlying.Contains(nameof(AppSettings.SlimeSize))) ApplySlimeSizeChange();
+        _deferredWhileFlying.Clear();
+    }
+
+    private void ApplySkinChange()
+    {
+        ClearExtraBalls(); // 테마(스킨) 바꾸면 놓았던 3/4구 당구공도 함께 치운다
+        ClearHoops();      // 농구 골대도 치운다
+        ExitBowling();     // 볼링 모드도 정리
+        ApplySkin();
+    }
+
+    private void ApplySlimeSizeChange()
+    {
+        ApplyWindowSize();
+        if (!_physics.IsCurrentPositionValid())
+            _physics.SetPositionClamped(_physics.Position);
+        ApplyWindowPosition();
+        ResizeHoops();
+    }
+
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
         // 방장이 겉모습을 바꾸면 방 전체에 그대로 배포한다.
@@ -1077,11 +1169,12 @@ public partial class SlimeWindow : Window
             case nameof(AppSettings.SlimeVisible):
                 ApplyVisibility();
                 break;
+            case nameof(AppSettings.ShowUsageTips):
+                UpdateTipTimer();
+                break;
             case nameof(AppSettings.Skin):
-                ClearExtraBalls(); // 테마(스킨) 바꾸면 놓았던 3/4구 당구공도 함께 치운다
-                ClearHoops();      // 농구 골대도 치운다
-                ExitBowling();     // 볼링 모드도 정리
-                ApplySkin();
+                if (DeferWhileFlying(e.PropertyName)) break; // 날아가는 중이면 멈춘 뒤 적용
+                ApplySkinChange();
                 break;
             case nameof(AppSettings.CueStickMode):
                 UpdateSpinAimVisibility();
@@ -1104,11 +1197,8 @@ public partial class SlimeWindow : Window
                 UpdateWindHotkey();
                 break;
             case nameof(AppSettings.SlimeSize):
-                ApplyWindowSize();
-                if (!_physics.IsCurrentPositionValid())
-                    _physics.SetPositionClamped(_physics.Position);
-                ApplyWindowPosition();
-                ResizeHoops();
+                if (DeferWhileFlying(e.PropertyName)) break; // 날아가는 중이면 멈춘 뒤 적용
+                ApplySlimeSizeChange();
                 break;
         }
     }
@@ -3125,6 +3215,7 @@ public partial class SlimeWindow : Window
         _shuttingDown = true;
         StopRendering();
         StopHandoffWatchdog();
+        _tipTimer?.Stop();
         ToastWindow.CloseAll();
 
         // 방에 들어가 있으면 먼저 정상적으로 나간다(서버가 즉시 이탈로 처리 → 상대 목록에서 바로 사라지고

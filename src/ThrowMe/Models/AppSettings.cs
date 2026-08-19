@@ -393,6 +393,10 @@ public sealed class AppSettings : INotifyPropertyChanged
     private bool _showToasts = true;
     public bool ShowToasts { get => _showToasts; set => Set(ref _showToasts, value); }
 
+    /// <summary>사용법 힌트를 중간중간 토스트로 띄워줄지(약 3분 간격 순환).</summary>
+    private bool _showUsageTips = true;
+    public bool ShowUsageTips { get => _showUsageTips; set => Set(ref _showUsageTips, value); }
+
     /// <summary>날아가는 중 클릭으로 방향을 바꿀 때, 이 속도(px/s) 이상이면 "되치기"로 본다.</summary>
     public double DeflectMinSpeed { get; set; } = 150.0;
 

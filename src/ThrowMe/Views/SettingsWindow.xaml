@@ -204,6 +204,13 @@
                                 </StackPanel>
                                 <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowToasts}"/>
                             </Grid>
+                            <Grid Margin="0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="사용법 힌트" Style="{StaticResource RowLabel}"/>
+                                    <TextBlock Text="사용법을 중간중간 우측 하단에 짧게 알려줍니다." Style="{StaticResource RowDesc}"/>
+                                </StackPanel>
+                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowUsageTips}"/>
+                            </Grid>
 
                             <!-- 당구(당구공 스킨일 때만 표시) -->
                             <StackPanel x:Name="BilliardSection">

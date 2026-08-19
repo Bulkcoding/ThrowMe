@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using WinFormsScreen = System.Windows.Forms.Screen;
 using Microsoft.Win32;
@@ -44,22 +45,37 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         double minX = double.MaxValue, minY = double.MaxValue;
         double maxX = double.MinValue, maxY = double.MinValue;
 
-        foreach (var screen in WinFormsScreen.AllScreens)
+        // Win32 로 직접 조회한다. PerMonitorV2 프로세스에서 GetMonitorInfo 의 좌표는
+        // 실제 물리 픽셀이라, 창 배치(SetWindowPos)가 쓰는 좌표계와 정확히 일치한다.
+        // System.Windows.Forms.Screen 은 혼합 DPI(예: 4K 배율) 환경에서 좌표가 어긋나,
+        // 보이지 않는 벽이나 모니터 사이 빈 틈을 만들어 공이 경계에서 막히는 원인이 됐다.
+        foreach (var (work, isPrimary) in EnumerateWorkAreas())
         {
-            var wa = screen.WorkingArea; // 물리 픽셀(PerMonitorV2 프로세스 기준)
-            var rect = new Rect(wa.X, wa.Y, wa.Width, wa.Height);
-            areas.Add(rect);
+            areas.Add(work);
+            if (isPrimary) primary = work;
 
-            if (screen.Primary)
-                primary = rect;
-
-            minX = Math.Min(minX, rect.Left);
-            minY = Math.Min(minY, rect.Top);
-            maxX = Math.Max(maxX, rect.Right);
-            maxY = Math.Max(maxY, rect.Bottom);
+            minX = Math.Min(minX, work.Left);
+            minY = Math.Min(minY, work.Top);
+            maxX = Math.Max(maxX, work.Right);
+            maxY = Math.Max(maxY, work.Bottom);
         }
 
-        // 방어: 스크린 조회 실패 시 기본값
+        // 방어: Win32 조회 실패 시 WinForms 로 폴백, 그것도 없으면 기본값.
+        if (areas.Count == 0)
+        {
+            foreach (var screen in WinFormsScreen.AllScreens)
+            {
+                var wa = screen.WorkingArea;
+                var rect = new Rect(wa.X, wa.Y, wa.Width, wa.Height);
+                areas.Add(rect);
+                if (screen.Primary) primary = rect;
+                minX = Math.Min(minX, rect.Left);
+                minY = Math.Min(minY, rect.Top);
+                maxX = Math.Max(maxX, rect.Right);
+                maxY = Math.Max(maxY, rect.Bottom);
+            }
+        }
+
         if (areas.Count == 0)
         {
             primary = new Rect(0, 0, 1920, 1080);
@@ -75,6 +91,44 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         PrimaryWorkingArea = primary;
         VirtualBounds = new Rect(minX, minY, maxX - minX, maxY - minY);
     }
+
+    /// <summary>모든 모니터의 작업 영역(물리 픽셀)과 주 모니터 여부를 Win32 로 열거한다.</summary>
+    private static List<(Rect Work, bool Primary)> EnumerateWorkAreas()
+    {
+        var result = new List<(Rect, bool)>();
+        MonitorEnumProc cb = (IntPtr hMon, IntPtr hdc, ref RECT lprc, IntPtr data) =>
+        {
+            var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (GetMonitorInfo(hMon, ref mi))
+            {
+                var w = mi.rcWork;
+                var rect = new Rect(w.Left, w.Top, Math.Max(0, w.Right - w.Left), Math.Max(0, w.Bottom - w.Top));
+                bool isPrimary = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
+                result.Add((rect, isPrimary));
+            }
+            return true; // 계속 열거
+        };
+        try { EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, cb, IntPtr.Zero); }
+        catch { /* 실패 시 폴백에서 처리 */ }
+        return result;
+    }
+
+    // ── Win32 (다중 모니터 물리 좌표) ──────────────────────────
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
+
+    private const uint MONITORINFOF_PRIMARY = 0x1;
+
+    private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdc, ref RECT lprc, IntPtr data);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
 
     /// <summary>점이 어느 한 모니터의 작업영역에 포함되는가.</summary>
     public bool IsInsideAny(System.Windows.Point p)
