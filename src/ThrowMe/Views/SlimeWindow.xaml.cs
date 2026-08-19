@@ -107,7 +107,6 @@ public partial class SlimeWindow : Window
         "설정에서 스킨을 바꿔 보세요 — 당구공·농구공·볼링·종이비행기까지 있어요.",
         "여러 모니터를 쓰면 슬라임이 화면 사이를 자유롭게 넘어다녀요.",
         "트레이 아이콘을 우클릭하면 일시정지·숨기기·설정을 열 수 있어요.",
-        "이 힌트가 번거로우면 설정 > 사용법 힌트에서 끌 수 있어요.",
     };
 
     public SlimeWindow(AppSettings settings, MonitorLayoutService monitors)
@@ -201,7 +200,8 @@ public partial class SlimeWindow : Window
         if (!_settings.SlimeVisible) return; // 숨긴 상태면 방해하지 않는다
         string tip = UsageTips[_tipIndex % UsageTips.Length];
         _tipIndex++;
-        ToastWindow.Show("사용법", tip);
+        // 힌트가 뜰 때마다 끄는 방법을 함께 알려 준다(설정 → 일반 → 사용법 힌트).
+        ToastWindow.Show("사용법 · 설정에서 끌 수 있어요", tip);
     }
 
     // ── 전역 단축키(잡기 / 빠르게 숨기기) ───────────────────

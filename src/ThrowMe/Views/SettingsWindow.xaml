@@ -4,6 +4,7 @@
         Title="ThrowMe 설정"
         Width="720" Height="520"
         WindowStyle="None" ResizeMode="NoResize"
+        Topmost="True"
         WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         ShowInTaskbar="True" FontFamily="Pretendard, Malgun Gothic" Icon="/Resources/ThrowMe.ico"

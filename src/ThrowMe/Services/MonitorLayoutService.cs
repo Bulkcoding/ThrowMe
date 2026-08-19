@@ -20,6 +20,9 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
     /// <summary>모든 모니터의 작업 영역(작업표시줄 제외). 물리 픽셀.</summary>
     public IReadOnlyList<Rect> WorkingAreas { get; private set; } = Array.Empty<Rect>();
 
+    /// <summary>모든 모니터의 전체 영역(작업표시줄 포함). 물리 픽셀. 충돌/통과 판정에 쓴다.</summary>
+    public IReadOnlyList<Rect> MonitorBounds { get; private set; } = Array.Empty<Rect>();
+
     /// <summary>주 모니터 작업 영역.</summary>
     public Rect PrimaryWorkingArea { get; private set; }
 
@@ -41,6 +44,7 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
     public void Refresh()
     {
         var areas = new List<Rect>();
+        var bounds = new List<Rect>();
         Rect primary = default;
         double minX = double.MaxValue, minY = double.MaxValue;
         double maxX = double.MinValue, maxY = double.MinValue;
@@ -49,15 +53,18 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         // 실제 물리 픽셀이라, 창 배치(SetWindowPos)가 쓰는 좌표계와 정확히 일치한다.
         // System.Windows.Forms.Screen 은 혼합 DPI(예: 4K 배율) 환경에서 좌표가 어긋나,
         // 보이지 않는 벽이나 모니터 사이 빈 틈을 만들어 공이 경계에서 막히는 원인이 됐다.
-        foreach (var (work, isPrimary) in EnumerateWorkAreas())
+        foreach (var (work, bound, isPrimary) in EnumerateMonitors())
         {
             areas.Add(work);
+            bounds.Add(bound);
             if (isPrimary) primary = work;
 
-            minX = Math.Min(minX, work.Left);
-            minY = Math.Min(minY, work.Top);
-            maxX = Math.Max(maxX, work.Right);
-            maxY = Math.Max(maxY, work.Bottom);
+            // 통과/외곽 벽은 전체 영역(작업표시줄 포함) 합집합 기준이라야
+            // 모니터 사이의 작업표시줄 틈에서도 공이 막히지 않고 넘어간다.
+            minX = Math.Min(minX, bound.Left);
+            minY = Math.Min(minY, bound.Top);
+            maxX = Math.Max(maxX, bound.Right);
+            maxY = Math.Max(maxY, bound.Bottom);
         }
 
         // 방어: Win32 조회 실패 시 WinForms 로 폴백, 그것도 없으면 기본값.
@@ -66,13 +73,15 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
             foreach (var screen in WinFormsScreen.AllScreens)
             {
                 var wa = screen.WorkingArea;
-                var rect = new Rect(wa.X, wa.Y, wa.Width, wa.Height);
-                areas.Add(rect);
-                if (screen.Primary) primary = rect;
-                minX = Math.Min(minX, rect.Left);
-                minY = Math.Min(minY, rect.Top);
-                maxX = Math.Max(maxX, rect.Right);
-                maxY = Math.Max(maxY, rect.Bottom);
+                var b = screen.Bounds;
+                areas.Add(new Rect(wa.X, wa.Y, wa.Width, wa.Height));
+                var bound = new Rect(b.X, b.Y, b.Width, b.Height);
+                bounds.Add(bound);
+                if (screen.Primary) primary = new Rect(wa.X, wa.Y, wa.Width, wa.Height);
+                minX = Math.Min(minX, bound.Left);
+                minY = Math.Min(minY, bound.Top);
+                maxX = Math.Max(maxX, bound.Right);
+                maxY = Math.Max(maxY, bound.Bottom);
             }
         }
 
@@ -80,6 +89,7 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         {
             primary = new Rect(0, 0, 1920, 1080);
             areas.Add(primary);
+            bounds.Add(primary);
             minX = 0; minY = 0; maxX = 1920; maxY = 1080;
         }
         else if (primary == default)
@@ -88,23 +98,26 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         }
 
         WorkingAreas = areas;
+        MonitorBounds = bounds;
         PrimaryWorkingArea = primary;
         VirtualBounds = new Rect(minX, minY, maxX - minX, maxY - minY);
     }
 
-    /// <summary>모든 모니터의 작업 영역(물리 픽셀)과 주 모니터 여부를 Win32 로 열거한다.</summary>
-    private static List<(Rect Work, bool Primary)> EnumerateWorkAreas()
+    /// <summary>모든 모니터의 작업 영역·전체 영역(물리 픽셀)과 주 모니터 여부를 Win32 로 열거한다.</summary>
+    private static List<(Rect Work, Rect Bounds, bool Primary)> EnumerateMonitors()
     {
-        var result = new List<(Rect, bool)>();
+        var result = new List<(Rect, Rect, bool)>();
         MonitorEnumProc cb = (IntPtr hMon, IntPtr hdc, ref RECT lprc, IntPtr data) =>
         {
             var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
             if (GetMonitorInfo(hMon, ref mi))
             {
                 var w = mi.rcWork;
-                var rect = new Rect(w.Left, w.Top, Math.Max(0, w.Right - w.Left), Math.Max(0, w.Bottom - w.Top));
+                var m = mi.rcMonitor;
+                var work = new Rect(w.Left, w.Top, Math.Max(0, w.Right - w.Left), Math.Max(0, w.Bottom - w.Top));
+                var bound = new Rect(m.Left, m.Top, Math.Max(0, m.Right - m.Left), Math.Max(0, m.Bottom - m.Top));
                 bool isPrimary = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
-                result.Add((rect, isPrimary));
+                result.Add((work, bound, isPrimary));
             }
             return true; // 계속 열거
         };
@@ -141,10 +154,22 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         return false;
     }
 
+    /// <summary>점이 어느 한 모니터의 전체 영역(작업표시줄 포함)에 포함되는가. 충돌/통과 판정용.</summary>
+    private bool InsideMonitors(System.Windows.Point p)
+    {
+        foreach (var b in MonitorBounds)
+        {
+            if (p.X >= b.Left && p.X < b.Right && p.Y >= b.Top && p.Y < b.Bottom)
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>
-    /// 슬라임 사각형의 네 모서리 + 중심이 모두 어느 한 모니터에 포함되면 유효.
-    /// 인접 모니터에 걸쳐 있어도(모서리가 서로 다른 모니터에 속함) 통과되고,
-    /// 빈 좌표 영역이나 외곽으로 벗어나면 무효(벽)로 판정된다.
+    /// 슬라임 사각형의 네 모서리 + 중심이 모두 어느 한 모니터(전체 영역)에 포함되면 유효.
+    /// 인접 모니터에 걸쳐 있어도(모서리가 서로 다른 모니터에 속함) 통과된다.
+    /// 작업표시줄은 화면의 일부로 보므로 모니터 사이의 작업표시줄 틈에서도 막히지 않고 넘어간다.
+    /// 빈 좌표 영역이나 데스크톱 바깥으로 벗어나면 무효(벽)로 판정된다.
     /// </summary>
     public bool IsRectValid(Rect rect)
     {
@@ -157,11 +182,11 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         double cx = rect.Left + rect.Width / 2.0;
         double cy = rect.Top + rect.Height / 2.0;
 
-        return IsInsideAny(new Point(left, top))
-            && IsInsideAny(new Point(right, top))
-            && IsInsideAny(new Point(left, bottom))
-            && IsInsideAny(new Point(right, bottom))
-            && IsInsideAny(new Point(cx, cy));
+        return InsideMonitors(new Point(left, top))
+            && InsideMonitors(new Point(right, top))
+            && InsideMonitors(new Point(left, bottom))
+            && InsideMonitors(new Point(right, bottom))
+            && InsideMonitors(new Point(cx, cy));
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
