@@ -347,7 +347,11 @@ public partial class SlimeWindow : Window
     /// <summary>단축키: 슬라임을 마우스 커서 위치로 데려와 정지(잡힘). 빠르게 날아가도 즉시 회수.</summary>
     private void CatchToCursor()
     {
-        if (!IsVisible) { _settings.SlimeVisible = true; }
+        // 숨긴 상태에서는 아무것도 하지 않는다. 예전에는 여기서 SlimeVisible 을 켜 버려서,
+        // 숨겨 둔 공이 잡기 단축키만 눌러도 다시 나타났다. 다시 보이게 하는 건
+        // 숨기기 단축키(또는 설정의 `슬라임 표시`)만 할 수 있어야 한다.
+        if (!_settings.SlimeVisible) return;
+
         Vector2 cursor = CursorPhysical();
         double half = _settings.SlimeSize / 2.0;
         _isDragging = false;

@@ -516,26 +516,45 @@ public partial class SettingsWindow : Window
     }
 
     // ── 단축키 재설정(변경→캡처→저장) ───────────────────────
-    /// <summary>어떤 단축키를 캡처 중인가. None 이면 캡처 중 아님.</summary>
-    private enum HotkeyTarget { None, Catch, Hide }
+    /// <summary>
+    /// 어떤 칸을 캡처 중인가. None 이면 캡처 중 아님.
+    ///
+    /// 잡기·숨기기는 <b>반드시 조합키</b>여야 해서 칸을 둘로 나눴다(수정자 + 키/클릭).
+    /// 수정자 없이 단독 키를 허용하면 평소 타이핑과 클릭까지 전역으로 가로챈다 —
+    /// 실제로 맨 좌클릭이 잡기로 걸려 공이 계속 끌려다닌 적이 있다.
+    /// </summary>
+    private enum HotkeyTarget { None, CatchMod, CatchKey, HideMod, HideKey }
 
     private HotkeyTarget _capturing = HotkeyTarget.None;
     private int _pMod, _pVk, _pMouse;            // 잡기 대기값
     private int _hMod, _hVk, _hMouse;            // 숨기기 대기값
 
-    private void OnRebindCatch(object sender, RoutedEventArgs e)
-    {
-        _capturing = HotkeyTarget.Catch;
-        _pMod = _pVk = _pMouse = 0;
-        RebindBtn.Content = "키/클릭 입력…";
-        SaveBtn.IsEnabled = false;
-    }
+    private void OnRebindCatchMod(object sender, RoutedEventArgs e)
+        => BeginCapture(HotkeyTarget.CatchMod);
 
-    private void OnRebindHide(object sender, RoutedEventArgs e)
+    private void OnRebindCatchKey(object sender, RoutedEventArgs e)
+        => BeginCapture(HotkeyTarget.CatchKey);
+
+    private void OnRebindHideMod(object sender, RoutedEventArgs e)
+        => BeginCapture(HotkeyTarget.HideMod);
+
+    private void OnRebindHideKey(object sender, RoutedEventArgs e)
+        => BeginCapture(HotkeyTarget.HideKey);
+
+    private void BeginCapture(HotkeyTarget target)
     {
-        _capturing = HotkeyTarget.Hide;
-        _hMod = _hVk = _hMouse = 0;
-        RebindHideBtn.Content = "키/클릭 입력…";
+        _capturing = target;
+        bool isMod = target is HotkeyTarget.CatchMod or HotkeyTarget.HideMod;
+        string prompt = isMod ? "수정자 입력…" : "키/클릭 입력…";
+
+        // 캡처 중인 칸만 비운다 — 반대쪽 칸(이미 정해 둔 값)은 그대로 둔다.
+        switch (target)
+        {
+            case HotkeyTarget.CatchMod: _pMod = 0; CatchModBtn.Content = prompt; break;
+            case HotkeyTarget.CatchKey: _pVk = _pMouse = 0; CatchKeyBtn.Content = prompt; break;
+            case HotkeyTarget.HideMod: _hMod = 0; HideModBtn.Content = prompt; break;
+            case HotkeyTarget.HideKey: _hVk = _hMouse = 0; HideKeyBtn.Content = prompt; break;
+        }
         SaveBtn.IsEnabled = false;
     }
 
@@ -610,38 +629,85 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        if (_capturing == HotkeyTarget.None) return;
-        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
-            or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin) return; // 수정자 단독은 대기
+        if (_capturing == HotkeyTarget.None)
+        {
+            // 설정 초기화 단축키(Ctrl + R). 캡처 중일 때는 사용자가 그 조합을 단축키로
+            // 지정하려는 것이므로 여기까지 오지 않는다(위 분기에서 이미 처리·반환).
+            if ((e.Key == Key.R || e.SystemKey == Key.R)
+                && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                OnResetSettings(this, new RoutedEventArgs());
+                e.Handled = true;
+            }
+            return;
+        }
 
-        int vk = KeyInterop.VirtualKeyFromKey(key);
-        if (_capturing == HotkeyTarget.Catch) { _pMod = CurrentMods(); _pVk = vk; _pMouse = 0; }
-        else { _hMod = CurrentMods(); _hVk = vk; _hMouse = 0; }
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+        bool isModifierKey = key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
+            or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
+
+        if (_capturing is HotkeyTarget.CatchMod or HotkeyTarget.HideMod)
+        {
+            // 수정자 칸: 수정자만 받는다. 두 개를 함께 누르면(Ctrl+Shift) 둘 다 들어간다.
+            if (!isModifierKey) return;
+            int mods = CurrentMods();
+            if (mods == 0) return;
+            if (_capturing == HotkeyTarget.CatchMod) _pMod = mods; else _hMod = mods;
+        }
+        else
+        {
+            // 키 칸: 수정자 단독은 무시하고 실제 키를 기다린다.
+            if (isModifierKey) return;
+            int vk = KeyInterop.VirtualKeyFromKey(key);
+            if (_capturing == HotkeyTarget.CatchKey) { _pVk = vk; _pMouse = 0; }
+            else { _hVk = vk; _hMouse = 0; }
+        }
+
         EndCapture();
         e.Handled = true;
     }
 
     private void OnPreviewMouseDownCapture(object sender, MouseButtonEventArgs e)
     {
-        if (_capturing == HotkeyTarget.None) return;
+        // 마우스 클릭은 '키' 칸에서만 받는다(수정자 칸은 키보드 전용).
+        if (_capturing is not (HotkeyTarget.CatchKey or HotkeyTarget.HideKey)) return;
         int btn = e.ChangedButton switch { MouseButton.Right => 2, MouseButton.Middle => 3, _ => 1 };
-        if (_capturing == HotkeyTarget.Catch) { _pMod = CurrentMods(); _pMouse = btn; _pVk = 0; }
-        else { _hMod = CurrentMods(); _hMouse = btn; _hVk = 0; }
+        if (_capturing == HotkeyTarget.CatchKey) { _pMouse = btn; _pVk = 0; }
+        else { _hMouse = btn; _hVk = 0; }
         EndCapture();
         e.Handled = true;
     }
 
     private void EndCapture()
     {
-        if (_capturing == HotkeyTarget.Catch) RebindBtn.Content = HotkeyText(_pMod, _pVk, _pMouse);
-        else RebindHideBtn.Content = HotkeyText(_hMod, _hVk, _hMouse);
         _capturing = HotkeyTarget.None;
+        RefreshHotkeyBoxes();
         SaveBtn.IsEnabled = true; // 저장을 눌러야 적용
     }
 
+    /// <summary>네 칸의 표시를 대기값으로 다시 그린다.</summary>
+    private void RefreshHotkeyBoxes()
+    {
+        CatchModBtn.Content = ModText(_pMod);
+        CatchKeyBtn.Content = KeyText(_pVk, _pMouse);
+        HideModBtn.Content = ModText(_hMod);
+        HideKeyBtn.Content = KeyText(_hVk, _hMouse);
+    }
+
+    /// <summary>조합키로 성립하는가 — 수정자와 키(또는 클릭)가 모두 있어야 한다.</summary>
+    private static bool IsValidCombo(int mod, int vk, int mouse) => mod != 0 && (vk != 0 || mouse != 0);
+
     private void OnSaveHotkey(object sender, RoutedEventArgs e)
     {
+        if (!IsValidCombo(_pMod, _pVk, _pMouse) || !IsValidCombo(_hMod, _hVk, _hMouse))
+        {
+            MessageBox.Show(this,
+                "잡기와 숨기기는 수정자와 키를 모두 지정해야 합니다.\n\n" +
+                "비어 있는 칸을 눌러 Ctrl·Shift·Alt·Win 중 하나와, 함께 쓸 키나 마우스 클릭을 넣어 주세요.",
+                "단축키", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         _settings.CatchHotkeyMod = _pMod;
         _settings.CatchHotkeyVk = _pVk;
         _settings.CatchHotkeyMouse = _pMouse;
@@ -656,23 +722,25 @@ public partial class SettingsWindow : Window
         // 대기값을 현재 설정으로 초기화 — 한쪽만 바꿔 저장해도 다른 쪽이 지워지지 않도록.
         _pMod = _settings.CatchHotkeyMod; _pVk = _settings.CatchHotkeyVk; _pMouse = _settings.CatchHotkeyMouse;
         _hMod = _settings.HideHotkeyMod; _hVk = _settings.HideHotkeyVk; _hMouse = _settings.HideHotkeyMouse;
-
-        RebindBtn.Content = HotkeyText(_pMod, _pVk, _pMouse);
-        RebindHideBtn.Content = HotkeyText(_hMod, _hVk, _hMouse);
+        RefreshHotkeyBoxes();
     }
 
-    private static string HotkeyText(int mod, int vk, int mouse)
+    /// <summary>수정자 칸 표시. 비어 있으면 넣어야 한다는 걸 드러낸다.</summary>
+    private static string ModText(int mod)
     {
         var parts = new List<string>();
         if ((mod & 2) != 0) parts.Add("Ctrl");
         if ((mod & 4) != 0) parts.Add("Shift");
         if ((mod & 1) != 0) parts.Add("Alt");
         if ((mod & 8) != 0) parts.Add("Win");
-        if (vk != 0) parts.Add(KeyDisplayName(vk));
-        else if (mouse == 1) parts.Add("좌클릭");
-        else if (mouse == 2) parts.Add("우클릭");
-        else if (mouse == 3) parts.Add("중간클릭");
-        return parts.Count > 0 ? string.Join(" + ", parts) : "(없음)";
+        return parts.Count > 0 ? string.Join(" + ", parts) : "(수정자 필요)";
+    }
+
+    /// <summary>키/클릭 칸 표시.</summary>
+    private static string KeyText(int vk, int mouse)
+    {
+        if (vk != 0) return KeyDisplayName(vk);
+        return mouse switch { 1 => "좌클릭", 2 => "우클릭", 3 => "중간클릭", _ => "(키 필요)" };
     }
 
     /// <summary>Key.Oem3 처럼 알아보기 어려운 이름을 실제 새겨진 글자로 바꿔 보여준다.</summary>

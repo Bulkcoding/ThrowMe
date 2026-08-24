@@ -149,6 +149,21 @@ public sealed class AppSettings : INotifyPropertyChanged
             repairedAny = true;
         }
 
+        // 잡기·숨기기는 반드시 조합키여야 한다. 예전 설정에는 수정자 없이 저장된 값이 있는데,
+        // 그대로 두면 맨 키·맨 클릭이 전역으로 걸려 평소 타이핑과 클릭까지 가로챈다.
+        if (CatchHotkeyMod == 0 && (CatchHotkeyVk != 0 || CatchHotkeyMouse != 0))
+        {
+            Services.Logger.Info("Repaired bare catch hotkey -> added Ctrl.");
+            CatchHotkeyMod = ModCtrl;
+            repairedAny = true;
+        }
+        if (HideHotkeyMod == 0 && (HideHotkeyVk != 0 || HideHotkeyMouse != 0))
+        {
+            Services.Logger.Info("Repaired bare hide hotkey -> added Ctrl.");
+            HideHotkeyMod = ModCtrl;
+            repairedAny = true;
+        }
+
         return repairedAny;
     }
 
