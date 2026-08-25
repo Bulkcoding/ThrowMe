@@ -136,6 +136,14 @@
         <Setter Property="Margin" Value="7,1,0,0"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
+
+        <!-- 기본 지연이 1초라 올려도 한 박자 늦게 떴다. ToolTipService 속성은 자식으로
+             상속되지 않아(창에 걸어도 아이콘은 1000 그대로였다) 여기 직접 건다.
+             ShowDuration 은 설명이 긴 항목에서 읽다가 사라지지 않게 넉넉히 둔다. -->
+        <Setter Property="ToolTipService.InitialShowDelay" Value="120"/>
+        <Setter Property="ToolTipService.BetweenShowDelay" Value="0"/>
+        <Setter Property="ToolTipService.ShowDuration" Value="20000"/>
+
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Foreground" Value="{StaticResource Accent}"/>
