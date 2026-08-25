@@ -1185,6 +1185,18 @@ public partial class SlimeWindow : Window
             case nameof(AppSettings.ClickMarginPx):
                 ApplyWindowSize(); // 클릭 원 크기 갱신
                 break;
+            case nameof(AppSettings.InfiniteBounce):
+                if (_settings.InfiniteBounce)
+                {
+                    // 힘을 잃지 않으니 스스로 멈추지 않는다. 어떻게 멈추는지 지금 알려 준다
+                    // — 사용자가 직접 지정한 잡기 단축키를 그대로 보여 준다.
+                    string combo = Services.HotkeyText.Combo(
+                        _settings.CatchHotkeyMod, _settings.CatchHotkeyVk, _settings.CatchHotkeyMouse);
+                    ToastWindow.Show("무한 튕기기를 켰어요",
+                        $"공이 스스로 멈추지 않습니다. 잡기 단축키({combo})를 누르면 언제든 잡아서 멈출 수 있어요.", 8);
+                    EnsureRendering();
+                }
+                break;
             case nameof(AppSettings.Paused):
                 if (!_settings.Paused) EnsureRendering();
                 break;

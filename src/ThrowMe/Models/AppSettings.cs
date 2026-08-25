@@ -71,7 +71,57 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     /// <summary>슬라이더 범위(= UI Minimum/Maximum). 이 밖의 값은 손상으로 보고 되돌린다.</summary>
     public const double MinSpeedLimitScale = 0.25, MaxSpeedLimitScale = 4.0;
-    public const double MinSlowdownScale = 0.2, MaxSlowdownScale = 3.0;
+
+    /// <summary>감속 0 = 공기저항 없음(무한 튕기기). 그래서 최솟값이 0 이다.</summary>
+    public const double MinSlowdownScale = 0.0, MaxSlowdownScale = 3.0;
+
+    /// <summary>
+    /// 무한 튕기기. 켜면 감속을 0(공기저항 없음), 반발을 1.0(벽에서 힘을 잃지 않음)으로 만든다.
+    ///
+    /// 감속만 0 으로 해서는 무한이 되지 않는다 — 벽에 부딪힐 때마다 반발 계수만큼 잃기 때문에
+    /// 결국 <see cref="StopThreshold"/> 아래로 떨어져 멈춘다. 두 값이 함께 있어야 한다.
+    /// 끄면 켜기 직전의 값으로 되돌린다(종이비행기 가중치와 같은 방식).
+    /// </summary>
+    private bool _infiniteBounce;
+    public bool InfiniteBounce
+    {
+        get => _infiniteBounce;
+        set
+        {
+            if (_infiniteBounce == value) return;
+            if (value)
+            {
+                _slowdownBeforeInfinite = SlowdownScale;
+                _restitutionBeforeInfinite = Restitution;
+                SlowdownScale = 0.0;
+                Restitution = 1.0;
+            }
+            else
+            {
+                // 보관값이 없으면(설정 파일이 옛 버전이면) 기본값으로 돌린다.
+                SlowdownScale = _slowdownBeforeInfinite >= 0 ? _slowdownBeforeInfinite : 1.0;
+                Restitution = _restitutionBeforeInfinite >= 0 ? _restitutionBeforeInfinite : 0.7;
+                _slowdownBeforeInfinite = -1;
+                _restitutionBeforeInfinite = -1;
+            }
+            Set(ref _infiniteBounce, value);
+        }
+    }
+
+    /// <summary>무한 튕기기를 켜기 직전의 값. 음수 = 보관값 없음.</summary>
+    private double _slowdownBeforeInfinite = -1;
+    public double SlowdownBeforeInfinite
+    {
+        get => _slowdownBeforeInfinite;
+        set => _slowdownBeforeInfinite = value;
+    }
+
+    private double _restitutionBeforeInfinite = -1;
+    public double RestitutionBeforeInfinite
+    {
+        get => _restitutionBeforeInfinite;
+        set => _restitutionBeforeInfinite = value;
+    }
 
     /// <summary>배율까지 반영한 실제 속도 상한. 코드에서는 항상 이 값을 쓴다.</summary>
     [JsonIgnore] public double EffectiveMaxSpeed => MaxSpeed * SpeedLimitScale;

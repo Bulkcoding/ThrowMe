@@ -728,37 +728,19 @@ public partial class SettingsWindow : Window
     /// <summary>수정자 칸 표시. 비어 있으면 넣어야 한다는 걸 드러낸다.</summary>
     private static string ModText(int mod)
     {
-        var parts = new List<string>();
-        if ((mod & 2) != 0) parts.Add("Ctrl");
-        if ((mod & 4) != 0) parts.Add("Shift");
-        if ((mod & 1) != 0) parts.Add("Alt");
-        if ((mod & 8) != 0) parts.Add("Win");
-        return parts.Count > 0 ? string.Join(" + ", parts) : "(수정자 필요)";
+        string s = HotkeyText.Mod(mod);
+        return s.Length > 0 ? s : "(수정자 필요)";
     }
 
     /// <summary>키/클릭 칸 표시.</summary>
     private static string KeyText(int vk, int mouse)
     {
-        if (vk != 0) return KeyDisplayName(vk);
-        return mouse switch { 1 => "좌클릭", 2 => "우클릭", 3 => "중간클릭", _ => "(키 필요)" };
+        string s = HotkeyText.Key(vk, mouse);
+        return s.Length > 0 ? s : "(키 필요)";
     }
 
     /// <summary>Key.Oem3 처럼 알아보기 어려운 이름을 실제 새겨진 글자로 바꿔 보여준다.</summary>
-    private static string KeyDisplayName(int vk) => vk switch
-    {
-        0xC0 => "`",   // Oem3 (물결/백틱)
-        0xBD => "-",   // OemMinus
-        0xBB => "=",   // OemPlus
-        0xDB => "[",   // Oem4
-        0xDD => "]",   // Oem6
-        0xDC => "\\",  // Oem5
-        0xBA => ";",   // Oem1
-        0xDE => "'",   // Oem7
-        0xBC => ",",   // OemComma
-        0xBE => ".",   // OemPeriod
-        0xBF => "/",   // Oem2
-        _ => KeyInterop.KeyFromVirtualKey(vk).ToString(),
-    };
+    private static string KeyDisplayName(int vk) => HotkeyText.KeyName(vk);
 
     // ── 멀티 PC(릴레이) 설정 ────────────────────────────────
     // 배치는 "파티 순서(좌 → 우)" 하나로만 정한다(위/아래 없음). 방장이 드래그로 순서를

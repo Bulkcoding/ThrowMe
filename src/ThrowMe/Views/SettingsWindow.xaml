@@ -98,7 +98,7 @@
                                 </StackPanel>
                                 <Grid Grid.Column="1" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="46"/></Grid.ColumnDefinitions>
-                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="0.95" Value="{Binding Restitution}"/>
+                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="1.0" Value="{Binding Restitution}"/>
                                     <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding Restitution, StringFormat={}{0:P0}}"/>
                                 </Grid>
                             </Grid>
@@ -152,9 +152,20 @@
                                 </StackPanel>
                                 <Grid Grid.Column="1" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="46"/></Grid.ColumnDefinitions>
-                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0.2" Maximum="3.0" Value="{Binding SlowdownScale}"/>
+                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="3.0" Value="{Binding SlowdownScale}"/>
                                     <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding SlowdownScale, StringFormat={}{0:0.00}x}"/>
                                 </Grid>
+                            </Grid>
+
+                            <Grid Margin="0,6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="무한 튕기기" Style="{StaticResource RowLabel}"/>
+                                    <TextBlock Text="공이 힘을 잃지 않고 계속 튕겨 다닙니다. 감속을 0, 반발력을 100% 로 함께 맞춥니다. 끄면 켜기 직전 값으로 돌아갑니다."
+                                               Style="{StaticResource RowDesc}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Center"
+                                          IsChecked="{Binding InfiniteBounce}"/>
                             </Grid>
 
                             <TextBlock Text="동작" Style="{StaticResource Section}"/>
