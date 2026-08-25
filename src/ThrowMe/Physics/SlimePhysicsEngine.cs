@@ -170,7 +170,8 @@ public sealed class SlimePhysicsEngine
                     // 스핀이 벽을 물어 접선(세로) 방향으로 튀고, 스핀은 소모된다.
                     if (Math.Abs(AngularVelocity) > 1e-3)
                     {
-                        Velocity = Velocity.WithY(Velocity.Y + AngularVelocity * _settings.SpinWallKick);
+                        if (!_settings.InfiniteBounce) // 무한 튕기기는 힘을 얻지도 않는다(아래 설명)
+                            Velocity = Velocity.WithY(Velocity.Y + AngularVelocity * _settings.SpinWallKick);
                         AngularVelocity *= _settings.SpinWallRetain;
                     }
                     collided = true;
@@ -199,9 +200,15 @@ public sealed class SlimePhysicsEngine
                     }
                     Velocity = Velocity.WithY(-Velocity.Y * EffRestitution);
                     // 스핀이 벽을 물어 접선(가로) 방향으로 튀고, 스핀은 소모된다.
+                    //
+                    // 무한 튕기기에서는 이 가산을 하지 않는다. 평소에는 감속이 곧바로 먹어치워
+                    // 티가 안 나지만, 감속이 0 이면 더해진 속도가 영구히 남아 던진 것보다 빨라진다
+                    // (측정: 1500 으로 던져도 스핀 때문에 1966 까지 올라가 고정됐다).
+                    // 이 모드의 약속은 "힘을 잃지도 얻지도 않는다" 이므로 잃는 쪽만이 아니라 얻는 쪽도 막는다.
                     if (Math.Abs(AngularVelocity) > 1e-3)
                     {
-                        Velocity = Velocity.WithX(Velocity.X + AngularVelocity * _settings.SpinWallKick);
+                        if (!_settings.InfiniteBounce)
+                            Velocity = Velocity.WithX(Velocity.X + AngularVelocity * _settings.SpinWallKick);
                         AngularVelocity *= _settings.SpinWallRetain;
                     }
                     collided = true;
