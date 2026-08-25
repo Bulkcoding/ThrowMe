@@ -23,17 +23,17 @@
                 <ControlTemplate TargetType="ProgressBar">
                     <Grid ClipToBounds="True">
                         <!-- 바닥 트랙 -->
-                        <Border CornerRadius="3" Background="{TemplateBinding Background}"/>
+                        <Border CornerRadius="5" Background="{TemplateBinding Background}"/>
 
                         <!-- 폭 계산용(보이지 않는다). ProgressBar 가 이 폭을 기준으로 비율을 잰다. -->
                         <Rectangle x:Name="PART_Track" Fill="Transparent"/>
 
                         <!-- 결정 모드: 왼쪽부터 채워진다 -->
-                        <Border x:Name="PART_Indicator" CornerRadius="3" HorizontalAlignment="Left"
+                        <Border x:Name="PART_Indicator" CornerRadius="5" HorizontalAlignment="Left"
                                 Background="{TemplateBinding Foreground}"/>
 
                         <!-- 불확정 모드: 짧은 막대가 좌우로 흐른다 -->
-                        <Border x:Name="Pulse" CornerRadius="3" Width="80" HorizontalAlignment="Left"
+                        <Border x:Name="Pulse" CornerRadius="5" Width="80" HorizontalAlignment="Left"
                                 Background="{TemplateBinding Foreground}" Visibility="Collapsed">
                             <Border.RenderTransform>
                                 <TranslateTransform x:Name="PulseMove"/>
@@ -66,7 +66,7 @@
     <SolidColorBrush x:Key="Accent" Color="#E8623D"/>
     <SolidColorBrush x:Key="AccentDim" Color="#B94E30"/>
     <SolidColorBrush x:Key="TextBrush" Color="#EAEAEE"/>
-    <SolidColorBrush x:Key="MutedBrush" Color="#8C8C96"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#ACACB8"/>
 
     <!-- 텍스트 -->
     <Style x:Key="H1" TargetType="TextBlock">

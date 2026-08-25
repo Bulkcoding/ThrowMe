@@ -32,7 +32,7 @@
             <TextBlock x:Name="SubText2" Style="{StaticResource RowDesc}" Margin="0,4,0,0"
                        TextWrapping="Wrap" Text="끝나면 자동으로 다시 시작합니다."/>
 
-            <ProgressBar x:Name="Bar" Height="6" Margin="0,16,0,0"
+            <ProgressBar x:Name="Bar" Height="10" Margin="0,16,0,0"
                          Style="{StaticResource RoundedProgress}"
                          Minimum="0" Maximum="1" Value="0"
                          Background="{StaticResource TrackBg}"

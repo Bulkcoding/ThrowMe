@@ -133,6 +133,28 @@ public partial class SettingsWindow : Window
             : "벽에 튕기는 반발력.";
     }
 
+    /// <summary>사이드바가 접혀 있는가(아이콘만 보이는 상태).</summary>
+    private bool _sideCollapsed;
+
+    /// <summary>
+    /// 사이드바를 접고 편다. 접으면 글자를 숨기고 폭을 아이콘 크기로 줄여,
+    /// 창을 좁게 써도 설정 내용이 눌리지 않게 한다.
+    /// </summary>
+    private void OnToggleSidebar(object sender, RoutedEventArgs e)
+    {
+        _sideCollapsed = !_sideCollapsed;
+        SideCol.Width = new GridLength(_sideCollapsed ? 58 : 210);
+
+        var vis = _sideCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        NavTextApp.Visibility = vis;
+        NavText0.Visibility = vis;
+        NavText1.Visibility = vis;
+        NavText2.Visibility = vis;
+        NavText3.Visibility = vis;
+        NavText4.Visibility = vis;
+        NavText5.Visibility = vis;
+    }
+
     private void OnClose(object sender, RoutedEventArgs e) => Hide();
 
     private void OnNavChanged(object sender, SelectionChangedEventArgs e)

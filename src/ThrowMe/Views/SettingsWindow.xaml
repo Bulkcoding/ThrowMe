@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="ThrowMe 설정"
         Width="1100" Height="740"
-        WindowStyle="None" ResizeMode="NoResize"
+        WindowStyle="None" ResizeMode="CanResize"
+        MinWidth="900" MinHeight="560"
         Topmost="True"
         WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
@@ -41,57 +42,68 @@
 
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="210"/>
+                    <ColumnDefinition x:Name="SideCol" Width="210"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- 사이드바 -->
                 <Border Grid.Column="0" Background="{StaticResource SideBg}">
                     <DockPanel>
+                        <!-- 접기/펴기. 좁은 화면에서 목록을 아이콘만 남기고 접는다. -->
+                        <Button DockPanel.Dock="Top" x:Name="SideToggleBtn" Click="OnToggleSidebar"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                HorizontalAlignment="Left" Margin="14,10,0,0" Padding="6"
+                                Foreground="{StaticResource MutedBrush}"
+                                ToolTip="목록 접기 / 펴기">
+                            <TextBlock Style="{StaticResource NavIcon}" Text="&#xE700;" Width="18"/>
+                        </Button>
+
                         <!-- 앱 이름(선택 대상 아님) -->
-                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="20,14,12,10">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="20,8,12,10">
                             <TextBlock Style="{StaticResource NavIcon}" Text="&#xE80F;"
                                        Foreground="{StaticResource TextBrush}"/>
-                            <TextBlock Text="ThrowMe" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"
-                                       FontSize="13.5" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="NavTextApp" Text="ThrowMe" Foreground="{StaticResource TextBrush}"
+                                       FontWeight="SemiBold" FontSize="13.5" VerticalAlignment="Center"/>
                         </StackPanel>
 
+                        <!-- 접었을 때 항목이 폭을 넘어 가로 스크롤바가 생기지 않게 막는다. -->
                         <ListBox x:Name="Nav" DockPanel.Dock="Top" Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  SelectionChanged="OnNavChanged" ItemContainerStyle="{StaticResource NavItem}">
                             <ListBoxItem IsSelected="True">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource NavIcon}" Text="&#xE713;"/>
-                                    <TextBlock Text="일반" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NavText0" Text="일반" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ListBoxItem>
                             <ListBoxItem>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource NavIcon}" Text="&#xE790;"/>
-                                    <TextBlock Text="테마" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NavText1" Text="테마" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ListBoxItem>
                             <ListBoxItem>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource NavIcon}" Text="&#xE767;"/>
-                                    <TextBlock Text="소리" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NavText2" Text="소리" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ListBoxItem>
                             <ListBoxItem>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource NavIcon}" Text="&#xE765;"/>
-                                    <TextBlock Text="단축키" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NavText3" Text="단축키" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ListBoxItem>
                             <ListBoxItem>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource NavIcon}" Text="&#xE7F4;"/>
-                                    <TextBlock Text="멀티 PC" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NavText4" Text="멀티 PC" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ListBoxItem>
                             <ListBoxItem>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource NavIcon}" Text="&#xE7C3;"/>
-                                    <TextBlock Text="업데이트 노트" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NavText5" Text="업데이트 노트" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ListBoxItem>
                         </ListBox>
@@ -547,7 +559,7 @@
                         <!-- ══ 단축키 ══ -->
                         <StackPanel x:Name="PanelShortcuts" Visibility="Collapsed">
                             <TextBlock Text="단축키" Style="{StaticResource H1}"/>
-                            <TextBlock Text="전역 단축키로 슬라임을 다룹니다." Style="{StaticResource RowDesc}" Margin="0,4,0,0"/>
+                            <TextBlock Text="전역 단축키로 슬라임을 다룹니다." Style="{StaticResource RowDesc}" Margin="0,4,0,18"/>
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
@@ -639,7 +651,7 @@
                         <StackPanel x:Name="PanelNetwork" Visibility="Collapsed">
                             <TextBlock Text="멀티 PC" Style="{StaticResource H1}"/>
                             <TextBlock Text="로그인한 여러 PC를 연결해, 공이 화면 밖으로 나가면 다른 PC로 넘어갑니다. (인터넷 너머도 가능)"
-                                       Style="{StaticResource RowDesc}" Margin="0,4,0,0"/>
+                                       Style="{StaticResource RowDesc}" Margin="0,4,0,18"/>
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
@@ -749,7 +761,7 @@
                         <!-- ══ 업데이트 노트 ══ -->
                         <StackPanel x:Name="PanelUpdateNotes" Visibility="Collapsed">
                             <TextBlock Text="업데이트 노트" Style="{StaticResource H1}"/>
-                            <TextBlock x:Name="NotesHeaderText" Style="{StaticResource RowDesc}" Margin="0,4,0,0"
+                            <TextBlock x:Name="NotesHeaderText" Style="{StaticResource RowDesc}" Margin="0,4,0,18"
                                        TextWrapping="Wrap" Text="버전별로 무엇이 바뀌었는지 볼 수 있습니다."/>
 
                             <Border Style="{StaticResource Card}">
