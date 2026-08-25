@@ -127,6 +127,39 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
+    <!-- 항목 옆 'i' 아이콘. 설명을 상시 노출하지 않고 마우스를 올렸을 때만 보여 준다. -->
+    <Style x:Key="InfoIcon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+        <Setter Property="Text" Value="&#xE946;"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource MutedBrush}"/>
+        <Setter Property="Margin" Value="7,1,0,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- 툴팁도 어두운 테마로. 기본 툴팁은 흰 바탕이라 창과 따로 논다. -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="MaxWidth" Value="320"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border CornerRadius="8" Background="#2A2A32" BorderBrush="#3F3F4A"
+                            BorderThickness="1" Padding="12,9">
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- 카드 안 항목 사이의 얇은 구분선 -->
     <Style x:Key="RowDivider" TargetType="Border">
         <Setter Property="Height" Value="1"/>

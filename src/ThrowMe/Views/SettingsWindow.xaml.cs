@@ -122,13 +122,13 @@ public partial class SettingsWindow : Window
 
         SlowdownRow.IsEnabled = !locked;
         SlowdownRow.Opacity = locked ? 0.45 : 1.0;
-        SlowdownDesc.Text = locked
+        SlowdownDesc.ToolTip = locked
             ? "무한 튕기기가 켜져 있어 0 으로 고정됩니다."
             : "날아가던 공이 느려지는 정도입니다.";
 
         RestitutionRow.IsEnabled = !locked;
         RestitutionRow.Opacity = locked ? 0.45 : 1.0;
-        RestitutionDesc.Text = locked
+        RestitutionDesc.ToolTip = locked
             ? "무한 튕기기가 켜져 있어 100% 로 고정됩니다."
             : "벽에 튕기는 반발력.";
     }
