@@ -54,7 +54,7 @@ public partial class SettingsWindow : Window
         UpdateRebindText();
         UpdateAimKeyText();
         UpdateWindKeyText();
-        UpdateSlowdownLock();
+        UpdateInfiniteBounceLocks();
         UpdateBilliardSection();
         UpdateCustomImageSection();
         _settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -91,7 +91,7 @@ public partial class SettingsWindow : Window
                 UpdateCustomImageSection();
                 break;
             case nameof(AppSettings.InfiniteBounce):
-                UpdateSlowdownLock();
+                UpdateInfiniteBounceLocks();
                 break;
             case nameof(AppSettings.SkinImages):
             case nameof(AppSettings.SkinImageEnabled):
@@ -108,20 +108,29 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>
-    /// 무한 튕기기 중에는 감속을 못 만지게 잠근다.
+    /// 무한 튕기기 중에는 감속과 반발력을 못 만지게 잠근다.
     ///
-    /// 이 모드는 감속 0 을 전제로 하는데, 슬라이더로 감속을 올려 버리면 공이 결국 멈춰
-    /// "무한 튕기기가 켜져 있는데 멈춘다"는 앞뒤가 안 맞는 상태가 된다.
+    /// 이 모드는 <b>감속 0 + 반발 100%</b> 를 전제로 한다. 둘 중 하나라도 슬라이더로 되돌리면
+    /// 공이 결국 멈춰서 "무한 튕기기가 켜져 있는데 멈춘다"는 앞뒤가 안 맞는 상태가 된다.
     /// 끄면 켜기 직전 값으로 돌아가므로 여기서 막아도 잃는 것이 없다.
+    ///
+    /// 비활성화만 하면 왜 안 눌리는지 알 수 없으므로 설명 문구도 잠금 이유로 바꾼다.
     /// </summary>
-    private void UpdateSlowdownLock()
+    private void UpdateInfiniteBounceLocks()
     {
         bool locked = _settings.InfiniteBounce;
+
         SlowdownRow.IsEnabled = !locked;
         SlowdownRow.Opacity = locked ? 0.45 : 1.0;
         SlowdownDesc.Text = locked
             ? "무한 튕기기가 켜져 있어 0 으로 고정됩니다. 조절하려면 무한 튕기기를 끄세요."
             : "날아가던 공이 느려지는 정도입니다. 낮출수록 속도를 오래 유지해 멀리 날아가고, 높이면 금방 멈춥니다.";
+
+        RestitutionRow.IsEnabled = !locked;
+        RestitutionRow.Opacity = locked ? 0.45 : 1.0;
+        RestitutionDesc.Text = locked
+            ? "무한 튕기기가 켜져 있어 100% 로 고정됩니다. 조절하려면 무한 튕기기를 끄세요."
+            : "벽에 튕기는 반발력.";
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Hide();

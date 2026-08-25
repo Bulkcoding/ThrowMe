@@ -94,9 +94,10 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="230"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                     <TextBlock Text="Bounce Power" Style="{StaticResource RowLabel}"/>
-                                    <TextBlock Text="벽에 튕기는 반발력." Style="{StaticResource RowDesc}"/>
+                                    <TextBlock x:Name="RestitutionDesc" Text="벽에 튕기는 반발력."
+                                               Style="{StaticResource RowDesc}" TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                <Grid x:Name="RestitutionRow" Grid.Column="1" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="46"/></Grid.ColumnDefinitions>
                                     <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="1.0" Value="{Binding Restitution}"/>
                                     <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding Restitution, StringFormat={}{0:P0}}"/>
