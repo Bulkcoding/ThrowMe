@@ -95,7 +95,8 @@ public partial class App : Application
             return;
         }
 
-        Logger.Info("ThrowMe starting.");
+        LogEnvironment();
+        UpdateService.LogPreviousApplyResult();
 
         // 이전 실행에서 받아 둔 업데이트가 있으면, 창을 만들기 전에 교체·재시작하고 즉시 종료.
         if (UpdateService.TryApplyStagedUpdate())
@@ -138,6 +139,29 @@ public partial class App : Application
         _ = RunStartupUpdateAsync();
 
         Logger.Info("ThrowMe started.");
+    }
+
+    /// <summary>
+    /// 실행 환경을 한 줄로 남긴다. 원격에서 문의가 오면 가장 먼저 필요한 정보들이다
+    /// — 어떤 버전이 어디서 실행 중인지, 데이터가 어디에 쌓이는지, 화면 구성은 어떤지.
+    /// </summary>
+    private void LogEnvironment()
+    {
+        try
+        {
+            string exe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "(unknown)";
+            var screens = System.Windows.Forms.Screen.AllScreens;
+            string mons = string.Join(", ", screens.Select(s =>
+                $"{s.Bounds.Width}x{s.Bounds.Height}@{s.Bounds.X},{s.Bounds.Y}{(s.Primary ? "*" : "")}"));
+
+            Logger.Info($"ThrowMe starting. v{UpdateService.Current.ToString(3)} | OS {Environment.OSVersion.Version} " +
+                        $"| user {Environment.UserName} | exe '{exe}'");
+            Logger.Info($"Data folder '{AppPaths.Roaming}' | monitors {screens.Length}: {mons}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Environment log failed.", ex);
+        }
     }
 
     /// <summary>

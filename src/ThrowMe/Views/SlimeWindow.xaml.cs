@@ -234,11 +234,13 @@ public partial class SlimeWindow : Window
         // 키보드 트리거
         UnregisterHotKey(_hwnd, CatchHotkeyId);
         if (_settings.CatchHotkeyVk != 0)
-            RegisterHotKey(_hwnd, CatchHotkeyId, (uint)_settings.CatchHotkeyMod | MOD_NOREPEAT, (uint)_settings.CatchHotkeyVk);
+            LogHotkey("잡기", _settings.CatchHotkeyMod, _settings.CatchHotkeyVk,
+                RegisterHotKey(_hwnd, CatchHotkeyId, (uint)_settings.CatchHotkeyMod | MOD_NOREPEAT, (uint)_settings.CatchHotkeyVk));
 
         UnregisterHotKey(_hwnd, HideHotkeyId);
         if (_settings.HideHotkeyVk != 0)
-            RegisterHotKey(_hwnd, HideHotkeyId, (uint)_settings.HideHotkeyMod | MOD_NOREPEAT, (uint)_settings.HideHotkeyVk);
+            LogHotkey("숨기기", _settings.HideHotkeyMod, _settings.HideHotkeyVk,
+                RegisterHotKey(_hwnd, HideHotkeyId, (uint)_settings.HideHotkeyMod | MOD_NOREPEAT, (uint)_settings.HideHotkeyVk));
 
         // 마우스 트리거 — 둘 중 하나라도 쓰면 훅 하나로 함께 처리
         RemoveMouseTrigger();
@@ -246,7 +248,23 @@ public partial class SlimeWindow : Window
         {
             _mouseProc = MouseHookProc;
             _mouseHook = SetWindowsHookEx(WH_MOUSE_LL, _mouseProc, GetModuleHandle(null), 0);
+            // 잡기 기본값이 Ctrl + 좌클릭이라 키보드 등록이 아니라 이 훅을 탄다. 결과를 남겨 둔다.
+            if (_mouseHook != IntPtr.Zero)
+                Logger.Info($"Mouse hotkey hook installed (catch={_settings.CatchHotkeyMouse}, hide={_settings.HideHotkeyMouse}).");
+            else
+                Logger.Error("Mouse hotkey hook FAILED to install; 마우스 단축키가 동작하지 않습니다.");
         }
+    }
+
+    /// <summary>
+    /// 전역 단축키 등록 결과를 남긴다. 다른 앱이 같은 조합을 이미 잡고 있으면 등록이 실패하는데,
+    /// 지금까지는 조용히 넘어가 "단축키가 안 먹는다"는 문의의 원인을 알 수 없었다.
+    /// </summary>
+    private static void LogHotkey(string what, int mod, int vk, bool ok)
+    {
+        if (ok) Logger.Info($"Hotkey registered: {what} (mod={mod}, vk=0x{vk:X2}).");
+        else Logger.Error($"Hotkey NOT registered: {what} (mod={mod}, vk=0x{vk:X2}). " +
+                          "다른 앱이 같은 조합을 쓰고 있을 수 있습니다.");
     }
 
     private void RemoveMouseTrigger()

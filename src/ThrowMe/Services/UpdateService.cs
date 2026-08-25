@@ -27,6 +27,9 @@ public static class UpdateService
     /// <summary>받아 둔 버전의 릴리스 노트(교체 전). apply.cmd 는 이 파일을 지우지 않는다.</summary>
     private static string PendingNotes => Path.Combine(StageDir, "pending_notes.json");
 
+    /// <summary>직전 실행이 어떤 버전으로 교체를 시도했는지(버전\n대상경로). 결과 판정용.</summary>
+    private static string ApplyAttempt => Path.Combine(StageDir, "apply_attempt.txt");
+
     /// <summary>교체가 실제로 일어난 뒤, 새 버전이 처음 뜰 때 보여줄 노트.</summary>
     private static string AppliedNotes => Path.Combine(StageDir, "applied_notes.json");
     private static string TokenFile => Path.Combine(AppPaths.Local, "update_token.txt");
@@ -67,6 +70,12 @@ public static class UpdateService
 
             Directory.CreateDirectory(StageDir);
 
+            // 무엇을 어디로 교체하려 했는지 남긴다. 다음 실행에서 실제로 그 버전이 됐는지 확인한다
+            // — 교체가 조용히 실패하면 매번 다시 받으며 같은 팝업이 반복되는데, 지금은 그 사실이
+            //   어디에도 기록되지 않아 원격에서 원인을 알 수 없었다.
+            try { File.WriteAllText(ApplyAttempt, $"{pv}\n{target}"); } catch { }
+            Logger.Info($"Applying update v{pv} -> '{target}'.");
+
             // 교체가 확정된 시점에 노트를 applied 로 승격한다.
             // (pending_* 는 apply.cmd 가 지우므로, 살아남을 이름으로 옮겨 둔다.)
             PromoteNotes(pv);
@@ -90,6 +99,53 @@ public static class UpdateService
             return true;
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// 직전 실행이 시도한 교체가 실제로 반영됐는지 확인해 로그에 남긴다(앱 시작 시 1회).
+    /// 동작은 바꾸지 않는다 — 기록만 한다.
+    ///
+    /// 교체는 apply.cmd 의 copy 한 줄에 달려 있는데 그 결과를 아무도 보지 않는다.
+    /// 권한·백신 등으로 copy 가 실패하면 옛 버전이 그대로 다시 뜨고, 받아 둔 파일은 지워져
+    /// 다음 실행에 또 받는다(팝업 반복). 여기서 그 사실과 대상 폴더의 쓰기 가능 여부를 남긴다.
+    /// </summary>
+    public static void LogPreviousApplyResult()
+    {
+        try
+        {
+            if (!File.Exists(ApplyAttempt)) return;
+            string[] lines = File.ReadAllText(ApplyAttempt).Split('\n');
+            try { File.Delete(ApplyAttempt); } catch { }
+
+            if (!Version.TryParse(lines[0].Trim(), out var attempted)) return;
+            string target = lines.Length > 1 ? lines[1].Trim() : "(unknown)";
+
+            if (Current >= Normalize(attempted))
+            {
+                Logger.Info($"Update applied: now v{Current.ToString(3)}.");
+                return;
+            }
+
+            // 실패. 원인 후보를 함께 남겨 둔다 — 대부분 대상 폴더에 쓰기가 막힌 경우다.
+            string writable = "unknown";
+            try
+            {
+                string? dir = Path.GetDirectoryName(target);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    string probe = Path.Combine(dir, ".throwme_write_test");
+                    File.WriteAllText(probe, "ok");
+                    File.Delete(probe);
+                    writable = "yes";
+                }
+            }
+            catch (Exception ex) { writable = $"no ({ex.GetType().Name})"; }
+
+            Logger.Error($"Update did NOT apply. expected v{attempted} but running v{Current.ToString(3)}. " +
+                         $"target='{target}', target folder writable={writable}. " +
+                         "실행 파일을 덮어쓰지 못했습니다(권한/백신 가능성).");
+        }
+        catch (Exception ex) { Logger.Error("Apply-result check failed.", ex); }
     }
 
     /// <summary>백그라운드에서 최신 릴리스 확인 → 더 높으면 staging 에 exe 다운로드(다음 실행 때 적용).</summary>

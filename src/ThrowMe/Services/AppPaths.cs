@@ -44,11 +44,103 @@ public static class AppPaths
     private static bool _migrated;
     private static readonly List<string> PendingLog = new();
 
-    /// <summary>설정·스킨·로그가 들어가는 폴더(%APPDATA%\ThrowMe).</summary>
-    public static string Roaming => Ensure(Environment.SpecialFolder.ApplicationData);
+    /// <summary>
+    /// 모아 두는 데이터 폴더. 설정·로그·스킨·방 정보·업데이트 임시파일이 전부 여기 들어간다.
+    /// 예전에는 %APPDATA% 와 %LOCALAPPDATA% 로 흩어져 있어 사용자가 찾기 어려웠다.
+    /// </summary>
+    public const string SharedRoot = @"C:\ThrowMe";
 
-    /// <summary>방 접속 정보·업데이트 staging 폴더(%LOCALAPPDATA%\ThrowMe).</summary>
-    public static string Local => Ensure(Environment.SpecialFolder.LocalApplicationData);
+    /// <summary>실제로 쓰기로 결정된 데이터 폴더. <see cref="Initialize"/> 가 정한다.</summary>
+    private static string? _root;
+
+    /// <summary>
+    /// 설정·스킨·로그가 들어가는 폴더. 기본은 <see cref="SharedRoot"/>,
+    /// 만들 수 없으면 예전 위치(%APPDATA%\ThrowMe)로 물러난다.
+    /// </summary>
+    public static string Roaming => Root;
+
+    /// <summary>방 접속 정보·업데이트 staging 폴더. 이제 <see cref="Roaming"/> 과 같은 곳이다.</summary>
+    public static string Local => Root;
+
+    /// <summary>
+    /// 데이터 폴더를 결정한다. C:\ThrowMe 를 만들어 보고, 실제로 쓸 수 있을 때만 채택한다.
+    ///
+    /// 폴더 생성만 되고 쓰기가 막히는 경우가 있다(회사 GPO·EDR). 그래서 임시 파일을
+    /// 한 번 써 보고 지워 확인한다 — 여기서 잘못 판단하면 설정이 통째로 저장되지 않는다.
+    /// 실패하면 예전 경로를 그대로 쓰므로 사용자는 아무것도 잃지 않는다.
+    /// </summary>
+    private static string Root
+    {
+        get
+        {
+            lock (Gate)
+            {
+                if (_root != null) return _root;
+
+                string legacy = Ensure(Environment.SpecialFolder.ApplicationData);
+                try
+                {
+                    Directory.CreateDirectory(SharedRoot);
+                    string probe = System.IO.Path.Combine(SharedRoot, ".write_test");
+                    File.WriteAllText(probe, "ok");
+                    File.Delete(probe);
+                    _root = SharedRoot;
+                    Note($"Data folder: '{SharedRoot}'.");
+                }
+                catch (Exception ex)
+                {
+                    _root = legacy;
+                    Note($"'{SharedRoot}' unusable ({ex.GetType().Name}: {ex.Message}); using '{legacy}'.");
+                    return _root;
+                }
+
+                // 예전 위치(Roaming/Local)에 있던 데이터를 한 번만 옮겨 온다.
+                MigrateIntoRoot(legacy);
+                MigrateIntoRoot(Ensure(Environment.SpecialFolder.LocalApplicationData));
+                return _root;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 예전 폴더의 내용을 새 데이터 폴더로 복사한다(덮어쓰지 않는다).
+    ///
+    /// <b>복사</b>라서 원본이 남는다 — 옛 버전으로 되돌아가도 설정을 잃지 않는다.
+    /// 이미 새 폴더에 같은 이름이 있으면 새 것이 이긴다(두 번째 호출에서 Local 이
+    /// Roaming 것을 덮어쓰지 않게 하는 장치이기도 하다).
+    /// </summary>
+    private static void MigrateIntoRoot(string oldDir)
+    {
+        try
+        {
+            if (_root == null || !Directory.Exists(oldDir)) return;
+            if (string.Equals(oldDir, _root, StringComparison.OrdinalIgnoreCase)) return;
+
+            int files = 0;
+            foreach (string src in Directory.GetFiles(oldDir))
+            {
+                string dst = System.IO.Path.Combine(_root, System.IO.Path.GetFileName(src));
+                if (File.Exists(dst)) continue;
+                File.Copy(src, dst);
+                files++;
+            }
+            foreach (string dir in Directory.GetDirectories(oldDir))
+            {
+                string name = System.IO.Path.GetFileName(dir);
+                string dst = System.IO.Path.Combine(_root, name);
+                if (Directory.Exists(dst)) continue;
+                // update 폴더는 일시적 데이터라 노트만 가져온다(기존 규칙 유지).
+                CopyTree(dir, dst, name.Equals(UpdateDir, StringComparison.OrdinalIgnoreCase)
+                    ? UpdateFilesToMigrate : null);
+                files++;
+            }
+            if (files > 0) Note($"Moved user data '{oldDir}' -> '{_root}' ({files} entries).");
+        }
+        catch (Exception ex)
+        {
+            Note($"Migration from '{oldDir}' failed: {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// 이관을 미리 수행한다. 앱 시작 시 가장 먼저 호출한다
