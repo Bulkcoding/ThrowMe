@@ -54,6 +54,7 @@ public partial class SettingsWindow : Window
         UpdateRebindText();
         UpdateAimKeyText();
         UpdateWindKeyText();
+        UpdateSlowdownLock();
         UpdateBilliardSection();
         UpdateCustomImageSection();
         _settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -89,6 +90,9 @@ public partial class SettingsWindow : Window
                 UpdateBilliardSection();
                 UpdateCustomImageSection();
                 break;
+            case nameof(AppSettings.InfiniteBounce):
+                UpdateSlowdownLock();
+                break;
             case nameof(AppSettings.SkinImages):
             case nameof(AppSettings.SkinImageEnabled):
             case nameof(AppSettings.SkinImageScale):
@@ -101,6 +105,23 @@ public partial class SettingsWindow : Window
     private void OnTitleBarDrag(object sender, MouseButtonEventArgs e)
     {
         if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+    }
+
+    /// <summary>
+    /// 무한 튕기기 중에는 감속을 못 만지게 잠근다.
+    ///
+    /// 이 모드는 감속 0 을 전제로 하는데, 슬라이더로 감속을 올려 버리면 공이 결국 멈춰
+    /// "무한 튕기기가 켜져 있는데 멈춘다"는 앞뒤가 안 맞는 상태가 된다.
+    /// 끄면 켜기 직전 값으로 돌아가므로 여기서 막아도 잃는 것이 없다.
+    /// </summary>
+    private void UpdateSlowdownLock()
+    {
+        bool locked = _settings.InfiniteBounce;
+        SlowdownRow.IsEnabled = !locked;
+        SlowdownRow.Opacity = locked ? 0.45 : 1.0;
+        SlowdownDesc.Text = locked
+            ? "무한 튕기기가 켜져 있어 0 으로 고정됩니다. 조절하려면 무한 튕기기를 끄세요."
+            : "날아가던 공이 느려지는 정도입니다. 낮출수록 속도를 오래 유지해 멀리 날아가고, 높이면 금방 멈춥니다.";
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Hide();

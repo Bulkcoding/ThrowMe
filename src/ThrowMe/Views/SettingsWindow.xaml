@@ -147,10 +147,11 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="230"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                     <TextBlock Text="감속" Style="{StaticResource RowLabel}"/>
-                                    <TextBlock Text="날아가던 공이 느려지는 정도입니다. 낮출수록 속도를 오래 유지해 멀리 날아가고, 높이면 금방 멈춥니다."
-                                               Style="{StaticResource RowDesc}"/>
+                                    <TextBlock x:Name="SlowdownDesc"
+                                               Text="날아가던 공이 느려지는 정도입니다. 낮출수록 속도를 오래 유지해 멀리 날아가고, 높이면 금방 멈춥니다."
+                                               Style="{StaticResource RowDesc}" TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                <Grid x:Name="SlowdownRow" Grid.Column="1" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="46"/></Grid.ColumnDefinitions>
                                     <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="3.0" Value="{Binding SlowdownScale}"/>
                                     <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding SlowdownScale, StringFormat={}{0:0.00}x}"/>

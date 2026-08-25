@@ -33,10 +33,10 @@
                        TextWrapping="Wrap" Text="끝나면 자동으로 다시 시작합니다."/>
 
             <ProgressBar x:Name="Bar" Height="6" Margin="0,16,0,0"
+                         Style="{StaticResource RoundedProgress}"
                          Minimum="0" Maximum="1" Value="0"
                          Background="{StaticResource TrackBg}"
-                         Foreground="{StaticResource Accent}"
-                         BorderThickness="0"/>
+                         Foreground="{StaticResource Accent}"/>
 
             <TextBlock x:Name="PercentText" Style="{StaticResource RowDesc}" Margin="0,8,0,0"
                        HorizontalAlignment="Right" Text=""/>

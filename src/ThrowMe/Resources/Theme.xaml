@@ -7,6 +7,62 @@
     <SolidColorBrush x:Key="CardBg" Color="#2A2A30"/>
     <SolidColorBrush x:Key="HoverBg" Color="#33333A"/>
     <SolidColorBrush x:Key="TrackBg" Color="#3C3C44"/>
+
+    <!--
+      둥근 진행바. 기본 ProgressBar 템플릿은 각진 사각형이라 창의 다른 요소와 따로 논다.
+      CornerRadius 는 ProgressBar 의 속성이 아니라서 템플릿을 직접 만들어야 한다.
+
+      PART_Track / PART_Indicator 는 이름이 고정이다 — ProgressBar 가 이 둘을 찾아
+      Indicator 의 Width 를 값 비율대로 채운다. 이름을 바꾸면 진행률이 표시되지 않는다.
+      불확정(IsIndeterminate) 모드의 움직임도 기본 템플릿에 들어 있던 것이라 여기서 다시 만든다.
+    -->
+    <Style x:Key="RoundedProgress" TargetType="ProgressBar">
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Grid ClipToBounds="True">
+                        <!-- 바닥 트랙 -->
+                        <Border CornerRadius="3" Background="{TemplateBinding Background}"/>
+
+                        <!-- 폭 계산용(보이지 않는다). ProgressBar 가 이 폭을 기준으로 비율을 잰다. -->
+                        <Rectangle x:Name="PART_Track" Fill="Transparent"/>
+
+                        <!-- 결정 모드: 왼쪽부터 채워진다 -->
+                        <Border x:Name="PART_Indicator" CornerRadius="3" HorizontalAlignment="Left"
+                                Background="{TemplateBinding Foreground}"/>
+
+                        <!-- 불확정 모드: 짧은 막대가 좌우로 흐른다 -->
+                        <Border x:Name="Pulse" CornerRadius="3" Width="80" HorizontalAlignment="Left"
+                                Background="{TemplateBinding Foreground}" Visibility="Collapsed">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="PulseMove"/>
+                            </Border.RenderTransform>
+                        </Border>
+                    </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsIndeterminate" Value="True">
+                            <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="Pulse" Property="Visibility" Value="Visible"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard x:Name="PulseSb">
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetName="PulseMove"
+                                                         Storyboard.TargetProperty="X"
+                                                         From="-80" To="340" Duration="0:0:1.2"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <StopStoryboard BeginStoryboardName="PulseSb"/>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <SolidColorBrush x:Key="Accent" Color="#E8623D"/>
     <SolidColorBrush x:Key="AccentDim" Color="#B94E30"/>
     <SolidColorBrush x:Key="TextBrush" Color="#EAEAEE"/>
