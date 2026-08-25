@@ -67,6 +67,10 @@ public sealed class SlimePhysicsEngine
     /// <summary>마찰(공기저항) 오버라이드(설정 대신 사용). null이면 설정값. 골대 ON 시 현실값 고정용.</summary>
     public double? FrictionOverride { get; set; }
 
+    /// <summary>벽에 튕길 때 반사 방향을 좌우로 흔드는 최대 각도(deg). 0 이면 정직한 입사각=반사각.
+    /// 젤리 테마에서만 켠다(SlimeWindow.UpdateSkinBehavior 에서 주입).</summary>
+    public double RandomBounceSpreadDeg { get; set; } = 0.0;
+
     private double EffRestitution => RestitutionOverride ?? _settings.Restitution;
     // 사용자의 감속 배율은 여기 한 곳에서 곱한다 — 테마·골대·볼링의 마찰 오버라이드에도 함께 걸린다.
     private double EffFriction => (FrictionOverride ?? _settings.Friction) * _settings.SlowdownScale;
@@ -79,6 +83,12 @@ public sealed class SlimePhysicsEngine
 
     /// <summary>바닥에 붙어 구를 때 수평 감쇠(1/s). 공이 자연스럽게 멈추도록(구름 마찰).</summary>
     private const double GroundFriction = 2.6;
+
+    /// <summary>랜덤 반사 후에도 벽면과 최소한 이만큼(deg)은 벌어지게 한다.
+    /// 벽과 거의 나란한 방향이 나오면 다음 substep 에서 곧바로 또 부딪혀 벽을 따라 떨기 때문.</summary>
+    private const double MinExitAngleDeg = 10.0;
+
+    private readonly Random _rng = new();
 
     public SlimePhysicsEngine(AppSettings settings, IWalkableArea area)
     {
@@ -145,6 +155,10 @@ public sealed class SlimePhysicsEngine
 
         for (int i = 0; i < steps; i++)
         {
+            // 랜덤 반사는 substep 당 한 번만. 코너에서 X·Y 가 같이 부딪힐 때
+            // 두 번 겹쳐 돌면 흔들기 폭이 합쳐져 방향이 완전히 통제를 벗어난다.
+            bool randomized = false;
+
             // ── X 축 ────────────────────────────────
             double dx = Velocity.X * subDt;
             if (dx != 0)
@@ -173,6 +187,12 @@ public sealed class SlimePhysicsEngine
                         if (!_settings.InfiniteBounce) // 무한 튕기기는 힘을 얻지도 않는다(아래 설명)
                             Velocity = Velocity.WithY(Velocity.Y + AngularVelocity * _settings.SpinWallKick);
                         AngularVelocity *= _settings.SpinWallRetain;
+                    }
+                    // 스핀 킥까지 끝난 최종 속도를 흔든다 — 그래야 결과가 벽 안쪽임을 보장할 수 있다.
+                    if (RandomBounceSpreadDeg > 0 && !randomized)
+                    {
+                        RandomizeBounce(new Vector2(-Math.Sign(dx), 0));
+                        randomized = true;
                     }
                     collided = true;
                 }
@@ -210,6 +230,11 @@ public sealed class SlimePhysicsEngine
                         if (!_settings.InfiniteBounce)
                             Velocity = Velocity.WithX(Velocity.X + AngularVelocity * _settings.SpinWallKick);
                         AngularVelocity *= _settings.SpinWallRetain;
+                    }
+                    if (RandomBounceSpreadDeg > 0 && !randomized)
+                    {
+                        RandomizeBounce(new Vector2(0, -Math.Sign(dy)));
+                        randomized = true;
                     }
                     collided = true;
                 }
@@ -262,6 +287,41 @@ public sealed class SlimePhysicsEngine
             CollisionNormal = normal,
             CollisionPosition = hitPos,
         };
+    }
+
+    /// <summary>
+    /// 반사가 끝난 속도를 벽 법선 기준으로 무작위 각도만큼 회전시킨다(입사각=반사각 깨기).
+    ///
+    /// 회전이라 속도 크기가 보존된다 — 반발 계수로 이미 줄어든 양은 그대로 두고 방향만 바꾸므로,
+    /// 무한 튕기기의 "힘을 얻지도 잃지도 않는다" 약속이 유지된다.
+    ///
+    /// 뽑는 범위는 [반사각 ± 흔들기] 와 [벽면에서 최소 <see cref="MinExitAngleDeg"/> 이상 떨어진 방향]
+    /// 의 교집합이다. 순서가 중요하다 — 넓게 뽑고 나서 자르면 비스듬히 스친 충돌마다
+    /// 결과가 최소 이탈각 한 값에 몰려 매번 같은 각도로 튀어나온다. 범위를 먼저 좁히고 그 안에서 뽑는다.
+    ///
+    /// normal 은 플레이 영역 안쪽을 향하는 단위 벡터이고, 축 분리 반사라 항상 (±1,0) 또는 (0,±1) 이다.
+    /// </summary>
+    private void RandomizeBounce(Vector2 normal)
+    {
+        double speed = Velocity.Length;
+        if (speed < 1e-6) return;
+
+        // 법선 기준 좌표계: along = 벽에서 멀어지는 성분, tang = 벽을 따라가는 성분.
+        Vector2 tangent = new(-normal.Y, normal.X);
+        double along = Velocity.X * normal.X + Velocity.Y * normal.Y;
+        double tang = Velocity.X * tangent.X + Velocity.Y * tangent.Y;
+
+        double limit = (90.0 - MinExitAngleDeg) * Math.PI / 180.0;
+        double spread = RandomBounceSpreadDeg * Math.PI / 180.0;
+        double phi = Math.Atan2(tang, along);   // 반사 방향이 법선과 이루는 각(부호 있음)
+
+        double lo = Math.Max(phi - spread, -limit);
+        double hi = Math.Min(phi + spread, limit);
+        // 반사 방향 자체가 이미 허용 범위 밖(벽을 거의 스침)이면 가장 가까운 합법 각으로 붙인다.
+        double theta = hi > lo ? lo + _rng.NextDouble() * (hi - lo)
+                              : Math.Clamp(phi, -limit, limit);
+
+        Velocity = (normal * Math.Cos(theta) + tangent * Math.Sin(theta)) * speed;
     }
 
     /// <summary>

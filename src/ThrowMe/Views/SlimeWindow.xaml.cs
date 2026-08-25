@@ -471,6 +471,11 @@ public partial class SlimeWindow : Window
     /// <summary>농구공 중력 가속도(px/s^2). 부드러운 낙하.</summary>
     private const double BasketballGravity = 2200.0;
 
+    /// <summary>젤리가 벽에 튈 때 반사 방향을 좌우로 흔드는 최대 각도(deg).
+    /// 입사각을 아직 알아볼 수 있는 한계선이다 — 더 벌리면 벽 안쪽 반원 전체와 같아져
+    /// 어느 방향에서 던졌든 결과 분포가 같아진다(= 입사각 무시).</summary>
+    private const double JellyBounceSpreadDeg = 75.0;
+
     /// <summary>농구공 던지기 감쇠(마우스 속도 대비). 살살 던져지도록.</summary>
     private const double BasketballThrowScale = 0.55;
     /// <summary>농구공 던지기 속도 상한(px/s).</summary>
@@ -489,6 +494,9 @@ public partial class SlimeWindow : Window
         _physics.GravityY = basketball ? BasketballGravity
                           : paperPlane ? PaperGravity   // 종이답게 농구공보다 작은 중력
                           : 0.0;
+        // 젤리만 벽에서 랜덤한 각도로 튄다. 당구공·볼링공은 정직한 반사가 컨셉이고,
+        // 농구공·종이비행기는 중력으로 바닥을 치므로 랜덤이 걸리면 착지가 튄다.
+        _physics.RandomBounceSpreadDeg = _settings.Skin == SlimeSkinKind.Jelly ? JellyBounceSpreadDeg : 0.0;
         // 중력으로 즉시 낙하하도록 렌더 루프를 깨운다(초기화 완료 후에만; _animation 준비 뒤).
         if (basketball && _animation != null) EnsureRendering();
         if (_animation != null) ApplyPaperPlaneBehavior(); // 종이비행기 전용 물리·표시(다른 테마면 되돌림)
