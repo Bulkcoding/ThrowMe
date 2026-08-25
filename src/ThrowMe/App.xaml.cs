@@ -97,6 +97,7 @@ public partial class App : Application
 
         LogEnvironment();
         UpdateService.LogPreviousApplyResult();
+        NotifyBlockedUpdateOnce();
 
         // 이전 실행에서 받아 둔 업데이트가 있으면, 창을 만들기 전에 교체·재시작하고 즉시 종료.
         if (UpdateService.TryApplyStagedUpdate())
@@ -139,6 +140,37 @@ public partial class App : Application
         _ = RunStartupUpdateAsync();
 
         Logger.Info("ThrowMe started.");
+    }
+
+    /// <summary>
+    /// 업데이트 교체가 막혔으면 한 번만 알려 준다.
+    ///
+    /// 조용히 넘기면 사용자는 "왜 계속 옛 버전이지?" 를 알 길이 없고, 매번 알리면 잔소리가 된다.
+    /// 그래서 막힌 버전당 한 번만 띄운다. 상세 원인은 로그에 남아 있다.
+    /// </summary>
+    private void NotifyBlockedUpdateOnce()
+    {
+        try
+        {
+            var blocked = UpdateService.BlockedVersion;
+            if (blocked == null || !UpdateService.ShouldNotifyBlocked(blocked)) return;
+
+            // 창이 아직 없으므로 잠깐 뒤에 띄운다(토스트도 창이다).
+            var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            t.Tick += (_, _) =>
+            {
+                t.Stop();
+                try
+                {
+                    ToastWindow.Show($"업데이트를 적용하지 못했어요 (v{blocked.ToString(3)})",
+                        "실행 파일을 덮어쓰지 못했습니다. 백신 예외에 넣거나, ThrowMe.exe 를 쓰기 가능한 폴더로 옮겨 주세요.",
+                        9);
+                }
+                catch (Exception ex) { Logger.Error("Blocked-update toast failed.", ex); }
+            };
+            t.Start();
+        }
+        catch (Exception ex) { Logger.Error("Blocked-update notify failed.", ex); }
     }
 
     /// <summary>

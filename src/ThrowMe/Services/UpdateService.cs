@@ -30,6 +30,75 @@ public static class UpdateService
     /// <summary>직전 실행이 어떤 버전으로 교체를 시도했는지(버전\n대상경로). 결과 판정용.</summary>
     private static string ApplyAttempt => Path.Combine(StageDir, "apply_attempt.txt");
 
+    /// <summary>apply.cmd 가 남기는 교체 결과("ok" 또는 "fail &lt;errorlevel&gt;").</summary>
+    private static string ApplyResult => Path.Combine(StageDir, "apply_result.txt");
+
+    /// <summary>교체에 실패한 버전과 시각. 이 버전은 잠시 재시도하지 않는다(무한 재시작 방지).</summary>
+    private static string ApplyBlocked => Path.Combine(StageDir, "apply_blocked.txt");
+
+    /// <summary>실패한 교체를 다시 시도해 보기까지 기다리는 시간. 그 사이 권한·백신을 손볼 수 있다.</summary>
+    private static readonly TimeSpan BlockRetryAfter = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// 이 버전으로의 교체가 최근에 실패했는가. 실패한 지 <see cref="BlockRetryAfter"/> 가 지나면
+    /// 다시 시도하게 둔다 — 사용자가 그 사이 권한이나 백신 예외를 고쳤을 수 있다.
+    /// </summary>
+    private static bool IsApplyBlocked(Version pv)
+    {
+        try
+        {
+            if (!File.Exists(ApplyBlocked)) return false;
+            string[] lines = File.ReadAllText(ApplyBlocked).Split('\n');
+            if (!Version.TryParse(lines[0].Trim(), out var blocked)) return false;
+            if (Normalize(blocked) != Normalize(pv)) return false;   // 다른(더 새) 버전이면 다시 해 본다
+
+            if (lines.Length > 1 && DateTime.TryParse(lines[1].Trim(), out var at)
+                && DateTime.Now - at > BlockRetryAfter)
+            {
+                Logger.Info($"Retrying update v{pv} after previous failure.");
+                try { File.Delete(ApplyBlocked); } catch { }
+                return false;
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// 교체가 막힌 버전(사용자에게 안내할 값). 없으면 null.
+    /// 앱이 시작할 때 이 값이 있으면 "왜 업데이트가 안 되는지" 알려 준다.
+    /// </summary>
+    public static Version? BlockedVersion
+    {
+        get
+        {
+            try
+            {
+                if (!File.Exists(ApplyBlocked)) return null;
+                string first = File.ReadAllText(ApplyBlocked).Split('\n')[0].Trim();
+                return Version.TryParse(first, out var v) ? v : null;
+            }
+            catch { return null; }
+        }
+    }
+
+    /// <summary>안내를 이미 한 번 보여 준 버전인가(같은 내용을 매번 띄우지 않으려고).</summary>
+    private static string BlockedNotified => Path.Combine(StageDir, "apply_blocked_notified.txt");
+
+    /// <summary>이 버전에 대한 안내를 아직 안 보여 줬으면 true 를 돌려주고, 보여 준 것으로 표시한다.</summary>
+    public static bool ShouldNotifyBlocked(Version v)
+    {
+        try
+        {
+            if (File.Exists(BlockedNotified)
+                && Version.TryParse(File.ReadAllText(BlockedNotified).Trim(), out var done)
+                && Normalize(done) == Normalize(v)) return false;
+            File.WriteAllText(BlockedNotified, v.ToString());
+            return true;
+        }
+        catch { return false; }
+    }
+
     /// <summary>교체가 실제로 일어난 뒤, 새 버전이 처음 뜰 때 보여줄 노트.</summary>
     private static string AppliedNotes => Path.Combine(StageDir, "applied_notes.json");
     private static string TokenFile => Path.Combine(AppPaths.Local, "update_token.txt");
@@ -64,6 +133,15 @@ public static class UpdateService
             if (!Version.TryParse(File.ReadAllText(PendingVer).Trim(), out var pv)) { Cleanup(); return false; }
             if (Normalize(pv) <= Current) { Cleanup(); return false; }
 
+            // 직전에 이 버전으로 교체하다 실패했다면 곧바로 또 시도하지 않는다.
+            // 재시도하면 "실행 → 교체 실패 → 재시작" 이 무한히 도는 꼴이 된다.
+            // 사용자가 권한·백신을 손볼 시간을 주고 하루 뒤에 한 번 더 해 본다.
+            if (IsApplyBlocked(pv))
+            {
+                Logger.Info($"Skipping apply of v{pv} — 직전 교체가 실패해 잠시 보류 중입니다.");
+                return false;
+            }
+
             string? target = Process.GetCurrentProcess().MainModule?.FileName;
             if (string.IsNullOrEmpty(target)) return false;
             int pid = Environment.ProcessId;
@@ -84,9 +162,19 @@ public static class UpdateService
                 "@echo off\r\n" +
                 ":wait\r\n" +
                 $"tasklist /fi \"PID eq {pid}\" | find \"{pid}\" >nul && (timeout /t 1 /nobreak >nul & goto wait)\r\n" +
-                $"copy /y \"{PendingExe}\" \"{target}\" >nul\r\n" +
+                // copy 결과를 반드시 본다. 예전에는 결과와 무관하게 받아 둔 파일을 지워 버려서,
+                // 교체가 실패해도 옛 버전이 그대로 다시 뜨고 다음 실행에 160MB 를 또 받았다.
+                // 성공했을 때만 지우고, 실패하면 그대로 남겨 결과 파일에 기록한다.
+                $"copy /y \"{PendingExe}\" \"{target}\" >nul 2>&1\r\n" +
+                "set RC=%errorlevel%\r\n" +
+                $"if not \"%RC%\"==\"0\" goto failed\r\n" +
+                $">\"{ApplyResult}\" echo ok\r\n" +
                 $"del /q \"{PendingExe}\" >nul 2>&1\r\n" +
                 $"del /q \"{PendingVer}\" >nul 2>&1\r\n" +
+                "goto run\r\n" +
+                ":failed\r\n" +
+                $">\"{ApplyResult}\" echo fail %RC%\r\n" +
+                ":run\r\n" +
                 $"start \"\" \"{target}\"\r\n" +
                 "del /q \"%~f0\" >nul 2>&1\r\n");
 
@@ -120,11 +208,23 @@ public static class UpdateService
             if (!Version.TryParse(lines[0].Trim(), out var attempted)) return;
             string target = lines.Length > 1 ? lines[1].Trim() : "(unknown)";
 
+            // apply.cmd 가 남긴 결과(있으면 더 정확하다)
+            string result = "(no result file)";
+            try { if (File.Exists(ApplyResult)) result = File.ReadAllText(ApplyResult).Trim(); } catch { }
+            try { if (File.Exists(ApplyResult)) File.Delete(ApplyResult); } catch { }
+
             if (Current >= Normalize(attempted))
             {
-                Logger.Info($"Update applied: now v{Current.ToString(3)}.");
+                Logger.Info($"Update applied: now v{Current.ToString(3)}. (apply result: {result})");
+                try { if (File.Exists(ApplyBlocked)) File.Delete(ApplyBlocked); } catch { }
+                try { if (File.Exists(BlockedNotified)) File.Delete(BlockedNotified); } catch { }
                 return;
             }
+
+            // 실패. 이 버전은 당분간 재시도하지 않는다 — 안 그러면 실행할 때마다
+            // "교체 시도 → 실패 → 재시작" 이 무한히 돈다. 받아 둔 파일은 apply.cmd 가
+            // 남겨 두었으므로 다시 받을 필요는 없다.
+            try { File.WriteAllText(ApplyBlocked, $"{attempted}\n{DateTime.Now:O}"); } catch { }
 
             // 실패. 원인 후보를 함께 남겨 둔다 — 대부분 대상 폴더에 쓰기가 막힌 경우다.
             string writable = "unknown";
@@ -142,8 +242,9 @@ public static class UpdateService
             catch (Exception ex) { writable = $"no ({ex.GetType().Name})"; }
 
             Logger.Error($"Update did NOT apply. expected v{attempted} but running v{Current.ToString(3)}. " +
-                         $"target='{target}', target folder writable={writable}. " +
-                         "실행 파일을 덮어쓰지 못했습니다(권한/백신 가능성).");
+                         $"apply result: {result}. target='{target}', target folder writable={writable}. " +
+                         "실행 파일을 덮어쓰지 못했습니다(권한/백신 가능성). " +
+                         $"{BlockRetryAfter.TotalHours}시간 동안 재시도를 보류합니다.");
         }
         catch (Exception ex) { Logger.Error("Apply-result check failed.", ex); }
     }
@@ -165,6 +266,14 @@ public static class UpdateService
             // 최신 버전 확인은 API 를 쓰지 않는다(IP 당 시간당 60회 한도 회피).
             Version? latest = await FetchLatestTagAsync();
             if (latest == null || latest <= Current) return;
+
+            // 교체가 막힌 버전이면 다시 받지 않는다. 예전에는 실패할 때마다 같은 파일을
+            // 매 실행 새로 받아(160MB) 진행 팝업만 반복됐다.
+            if (Normalize(latest) == Normalize(BlockedVersion ?? new Version(0, 0, 0, 0)))
+            {
+                Logger.Info($"Skipping download of v{latest} — 교체가 막혀 보류 중입니다.");
+                return;
+            }
 
             // 이미 같은(또는 더 높은) 버전을 받아 뒀으면 재다운로드 생략
             if (File.Exists(PendingVer) && Version.TryParse(File.ReadAllText(PendingVer).Trim(), out var staged)
@@ -232,7 +341,13 @@ public static class UpdateService
     {
         if (!UpdateConfig.Enabled) return null;
         Version? latest = await FetchLatestTagAsync();
-        return latest != null && latest > Current ? latest : null;
+        if (latest == null || latest <= Current) return null;
+
+        // 막힌 버전이면 "새 버전 있음"으로 보고하지 않는다 → 진행 팝업이 뜨지 않는다.
+        var blocked = BlockedVersion;
+        if (blocked != null && Normalize(blocked) == Normalize(latest)) return null;
+
+        return latest;
     }
 
     /// <summary>
