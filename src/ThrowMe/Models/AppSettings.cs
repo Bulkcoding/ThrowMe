@@ -26,6 +26,10 @@ public sealed class AppSettings : INotifyPropertyChanged
         return true;
     }
 
+    /// <summary>계산 속성처럼 다른 값에 딸려 바뀌는 항목을 직접 알린다.</summary>
+    private void Raise(string name) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
     // ── 물리 ────────────────────────────────────────────────
     // 엔진 튜닝 상수는 저장하지 않고 항상 코드 기본값 사용(JsonIgnore) → 파일이 옛 값으로 덮어쓰지 않음.
     /// <summary>공기저항/마찰 감쇠율(1/s). 낮을수록 멀리 오래 튄다. velocity *= exp(-Friction*dt)</summary>
@@ -150,6 +154,10 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// </summary>
     public void ResetToDefaults()
     {
+        // 화면 배율은 사용자가 고른 설정이 아니라 지금 창이 올라가 있는 모니터의 상태다.
+        // 통째로 복사하면 1.0 으로 돌아가 다음 DPI 변화 전까지 공이 작아진다.
+        double keepScale = DisplayScale;
+
         var defaults = new AppSettings();
         foreach (var p in typeof(AppSettings).GetProperties(
                      System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
@@ -157,6 +165,8 @@ public sealed class AppSettings : INotifyPropertyChanged
             if (!p.CanRead || !p.CanWrite || p.GetIndexParameters().Length > 0) continue;
             p.SetValue(this, p.GetValue(defaults));
         }
+
+        DisplayScale = keepScale;
 
         // Dictionary 는 통째로 갈아 끼워도 자동 통보되지 않는다.
         NotifySkinImagesChanged();
@@ -277,9 +287,40 @@ public sealed class AppSettings : INotifyPropertyChanged
     [JsonIgnore] public double ThrowSampleWindowMs { get; set; } = 60.0;
 
     // ── 슬라임 크기/시각 ────────────────────────────────────
-    /// <summary>슬라임 크기(물리 픽셀 기준 지름).</summary>
+    /// <summary>
+    /// 사용자가 설정에서 고른 크기. <b>화면 배율 100% 기준</b> 지름이다.
+    /// 설정 슬라이더·저장 파일·멀티 PC 동기화는 모두 이 값을 쓴다.
+    /// 실제로 그리고 부딪히는 크기는 <see cref="SlimeSize"/>.
+    /// </summary>
     private double _slimeSize = 96.0;
-    public double SlimeSize { get => _slimeSize; set => Set(ref _slimeSize, value); }
+    [JsonPropertyName("SlimeSize")]   // 저장 파일 키는 그대로 둔다(기존 설정 호환)
+    public double SlimeSizeBase
+    {
+        get => _slimeSize;
+        set { if (Set(ref _slimeSize, value)) Raise(nameof(SlimeSize)); }
+    }
+
+    /// <summary>
+    /// 슬라임 창이 있는 모니터의 화면 배율(Windows 디스플레이 배율). 저장하지 않는다 — 실행 중 창이
+    /// 다른 배율의 모니터로 옮겨 가면 갱신된다(SlimeWindow.UpdateDpiScale).
+    /// </summary>
+    private double _displayScale = 1.0;
+    [JsonIgnore]
+    public double DisplayScale
+    {
+        get => _displayScale;
+        set { if (Set(ref _displayScale, value)) Raise(nameof(SlimeSize)); }
+    }
+
+    /// <summary>
+    /// 실제로 그리고 부딪히는 지름(물리 픽셀).
+    ///
+    /// 화면 배율을 곱한다 — 4K 는 보통 배율이 150~200% 라, 글자·아이콘은 그만큼 커지는데
+    /// 공만 실제 픽셀 고정이면 혼자 작아 보였다. 배율을 곱하면 어느 화면에서도 같은 크기로 보인다.
+    /// 물리 충돌 상자도 이 값을 써야 그림과 어긋나지 않는다.
+    /// </summary>
+    [JsonIgnore]   // 계산값이라 저장하지 않는다. 빼면 SlimeSizeBase 와 저장 키가 충돌한다.
+    public double SlimeSize => _slimeSize * _displayScale;
 
     /// <summary>말랑함(Slime Softness). Squash/Stretch 강도 스케일. 0~1</summary>
     private double _softness = 0.5;

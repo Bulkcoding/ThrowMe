@@ -22,7 +22,7 @@ internal static class PreviewRenderer
     public static void Run(string outDir)
     {
         Directory.CreateDirectory(outDir);
-        var settings = new AppSettings { SlimeSize = 96 };
+        var settings = new AppSettings { SlimeSizeBase = 96 };
 
         // 농구공 기본 + 여러 바운스 무늬
         Save(Wrap(new BasketballSkin(), 220), 220, 220, Path.Combine(outDir, "ball_default.png"));

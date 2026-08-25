@@ -171,6 +171,9 @@ public partial class SlimeWindow : Window
 
         UpdateTipTimer(); // 사용법 힌트 순환 시작(설정이 켜져 있을 때만)
 
+        // 무한 튕기기는 저장되므로, 켜 둔 채로 껐다 켜면 안내 없이 시작된다. 여기서 다시 띄운다.
+        UpdateInfiniteBounceNotice();
+
         // 시작은 정지 상태이므로 렌더 루프를 돌리지 않는다(CPU 절감).
     }
 
@@ -426,6 +429,10 @@ public partial class SlimeWindow : Window
             _dpiScaleX = m.M11 > 0 ? m.M11 : 1.0;
             _dpiScaleY = m.M22 > 0 ? m.M22 : 1.0;
         }
+
+        // 공 크기가 화면 배율을 따라가게 한다(4K 에서 혼자 작아 보이던 문제).
+        // 가로 배율만 쓴다 — Windows 는 축마다 다른 배율을 주지 않고, 공은 정사각이라야 한다.
+        _settings.DisplayScale = _dpiScaleX;
     }
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
@@ -466,6 +473,28 @@ public partial class SlimeWindow : Window
         // 애니메이션 컨트롤러는 XAML Transform 이 준비된 뒤 1회 생성.
         _animation ??= new SlimeAnimationController(SlimeScale, SlimeRotate, _settings);
         UpdateSkinBehavior();
+    }
+
+    /// <summary>무한 튕기기 안내를 붙잡아 두는 키.</summary>
+    private const string InfiniteBounceNoticeKey = "infinite-bounce";
+
+    /// <summary>
+    /// 무한 튕기기가 켜져 있는 <b>동안 내내</b> 멈추는 법을 띄워 둔다.
+    /// 공이 스스로 멈추지 않으므로, 몇 초 뒤 사라지면 나중에 멈추고 싶을 때 방법을 알 길이 없다.
+    /// 단축키를 바꾸면 문구도 새로 맞춰야 하므로 한 번 내리고 다시 띄운다.
+    /// </summary>
+    private void UpdateInfiniteBounceNotice()
+    {
+        if (!_settings.InfiniteBounce)
+        {
+            ToastWindow.CloseSticky(InfiniteBounceNoticeKey);
+            return;
+        }
+
+        string combo = Services.HotkeyText.Combo(
+            _settings.CatchHotkeyMod, _settings.CatchHotkeyVk, _settings.CatchHotkeyMouse);
+        ToastWindow.ShowSticky(InfiniteBounceNoticeKey, "무한 튕기기를 켰어요",
+            $"공이 스스로 멈추지 않습니다. 잡기 단축키({combo})를 누르면 언제든 잡아서 멈출 수 있어요.");
     }
 
     /// <summary>농구공 중력 가속도(px/s^2). 부드러운 낙하.</summary>
@@ -1161,7 +1190,7 @@ public partial class SlimeWindow : Window
         nameof(AppSettings.ThrowPower),
         nameof(AppSettings.Restitution),
         nameof(AppSettings.Softness),
-        nameof(AppSettings.SlimeSize),
+        nameof(AppSettings.SlimeSizeBase),
         nameof(AppSettings.SkinImages),
         nameof(AppSettings.SkinImageEnabled),
         nameof(AppSettings.SkinImageScale),
@@ -1226,16 +1255,8 @@ public partial class SlimeWindow : Window
                 ApplyWindowSize(); // 클릭 원 크기 갱신
                 break;
             case nameof(AppSettings.InfiniteBounce):
-                if (_settings.InfiniteBounce)
-                {
-                    // 힘을 잃지 않으니 스스로 멈추지 않는다. 어떻게 멈추는지 지금 알려 준다
-                    // — 사용자가 직접 지정한 잡기 단축키를 그대로 보여 준다.
-                    string combo = Services.HotkeyText.Combo(
-                        _settings.CatchHotkeyMod, _settings.CatchHotkeyVk, _settings.CatchHotkeyMouse);
-                    ToastWindow.Show("무한 튕기기를 켰어요",
-                        $"공이 스스로 멈추지 않습니다. 잡기 단축키({combo})를 누르면 언제든 잡아서 멈출 수 있어요.", 8);
-                    EnsureRendering();
-                }
+                UpdateInfiniteBounceNotice();
+                if (_settings.InfiniteBounce) EnsureRendering();
                 break;
             case nameof(AppSettings.Paused):
                 if (!_settings.Paused) EnsureRendering();
@@ -1265,6 +1286,9 @@ public partial class SlimeWindow : Window
             case nameof(AppSettings.HideHotkeyVk):
             case nameof(AppSettings.HideHotkeyMouse):
                 RegisterHotkeys();
+                // 안내 문구가 바뀐 잡기 단축키를 그대로 보여주도록 다시 띄운다.
+                ToastWindow.CloseSticky(InfiniteBounceNoticeKey);
+                UpdateInfiniteBounceNotice();
                 break;
             case nameof(AppSettings.WindHotkeyVk):
                 UnregisterWindHotkey(); // 새 키로 다시 잡도록 먼저 놓아준다
@@ -1842,9 +1866,9 @@ public partial class SlimeWindow : Window
         ExitBowling(); // 중복 방지
 
         // 볼링은 항상 기본 크기(default)로. 사용자 크기를 기억했다가 종료 시 복원.
-        _savedSlimeSize = _settings.SlimeSize;
-        if (Math.Abs(_settings.SlimeSize - BowlingSize) > 0.5)
-            _settings.SlimeSize = BowlingSize; // PropertyChanged → 창/물리 즉시 재적용
+        _savedSlimeSize = _settings.SlimeSizeBase;
+        if (Math.Abs(_settings.SlimeSizeBase - BowlingSize) > 0.5)
+            _settings.SlimeSizeBase = BowlingSize; // PropertyChanged → 창/물리 즉시 재적용
 
         // 기름칠 레인: 마찰을 낮춰 매끄럽게 굴러가게 한다(세기 보정은 하지 않는다).
         _savedFriction = _settings.Friction;
@@ -1902,7 +1926,7 @@ public partial class SlimeWindow : Window
         Topmost = _settings.AlwaysOnTop;
         if (_savedSlimeSize.HasValue)
         {
-            _settings.SlimeSize = _savedSlimeSize.Value; // 사용자 크기 복원
+            _settings.SlimeSizeBase = _savedSlimeSize.Value; // 사용자 크기 복원
             _savedSlimeSize = null;
         }
         if (_savedFriction.HasValue)
@@ -2016,7 +2040,7 @@ public partial class SlimeWindow : Window
         ThrowPower = _settings.ThrowPower,
         Restitution = _settings.Restitution,
         Softness = _settings.Softness,
-        SlimeSize = _settings.SlimeSize,
+        SlimeSize = _settings.SlimeSizeBase,
         SkinImageEnabled = _settings.SkinImageEnabled,
         SkinImageScale = _settings.SkinImageScale,
         ImageSkin = SkinImageStore.Supports(_settings.Skin) && SkinImageStore.Has(_settings.Skin)
@@ -2060,7 +2084,7 @@ public partial class SlimeWindow : Window
             ThrowPower = _settings.ThrowPower,
             Restitution = _settings.Restitution,
             Softness = _settings.Softness,
-            SlimeSize = _settings.SlimeSize,
+            SlimeSize = _settings.SlimeSizeBase,
             SkinImageEnabled = _settings.SkinImageEnabled,
             SkinImageScale = _settings.SkinImageScale,
         };
@@ -2128,7 +2152,7 @@ public partial class SlimeWindow : Window
             else Logger.Info($"Room style: ignoring invalid throwPower ({d.ThrowPower}).");
             _settings.Restitution = d.Restitution;
             _settings.Softness = d.Softness;
-            if (d.SlimeSize > 0) _settings.SlimeSize = d.SlimeSize;
+            if (d.SlimeSize > 0) _settings.SlimeSizeBase = d.SlimeSize;
             _settings.SkinImageEnabled = d.SkinImageEnabled;
             if (d.SkinImageScale > 0) _settings.SkinImageScale = d.SkinImageScale;
 

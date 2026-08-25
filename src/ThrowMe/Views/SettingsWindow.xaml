@@ -154,8 +154,8 @@
                                                 </StackPanel>
                                                 <Grid Grid.Column="1" VerticalAlignment="Center">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
-                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="48" Maximum="180" Value="{Binding SlimeSize}"/>
-                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding SlimeSize, StringFormat={}{0:0}px}"/>
+                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="48" Maximum="180" Value="{Binding SlimeSizeBase}"/>
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding SlimeSizeBase, StringFormat={}{0:0}px}"/>
                                                 </Grid>
                                             </Grid>
                                             <Border Style="{StaticResource RowDivider}"/>
