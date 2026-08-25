@@ -307,7 +307,14 @@ public partial class SlimeWindow : Window
                 && msg == MouseMsgFor(_settings.CatchHotkeyMouse)
                 && ModifiersHeld(_settings.CatchHotkeyMod))
             {
-                try { CatchToCursor(); } catch { }
+                try
+                {
+                    if (_physics.Velocity.Length >= 50)
+                        Logger.Info($"[CLICK] 전역 훅이 삼킴 → 커서로 회수(잡기 단축키). " +
+                                    $"mod={_settings.CatchHotkeyMod}, mouse={_settings.CatchHotkeyMouse}");
+                    CatchToCursor();
+                }
+                catch { }
                 return (IntPtr)1;
             }
         }
@@ -363,6 +370,30 @@ public partial class SlimeWindow : Window
     }
 
     /// <summary>단축키: 슬라임을 마우스 커서 위치로 데려와 정지(잡힘). 빠르게 날아가도 즉시 회수.</summary>
+    /// <summary>
+    /// 좌클릭이 <b>공 창까지 도달했는지</b> 남긴다.
+    ///
+    /// "날아가는 공을 마우스로 못 잡는다"는 문의가 반복되는데, 클릭이
+    ///  ① 전역 훅에 먹혔는지 ② 창까지 왔는지 ③ 왔는데 위치가 빗나갔는지
+    /// 구분할 방법이 없었다. 움직이는 중일 때만, 그리고 너무 잦지 않게 남긴다.
+    /// </summary>
+    private double _lastClickLogAt;
+    private void LogClickReachedWindow(Vector2 cursor)
+    {
+        double speed = _physics.Velocity.Length;
+        if (speed < 50) return;                 // 멈춰 있을 때는 기록하지 않는다(잘 잡히는 경우)
+        double now = Now;
+        if (now - _lastClickLogAt < 0.4) return;
+        _lastClickLogAt = now;
+
+        double half = _settings.SlimeSize / 2.0;
+        Vector2 center = _physics.Position + new Vector2(half, half);
+        double dist = (cursor - center).Length;
+        double hitR = (_settings.SlimeSize + 2 * Math.Max(0, SettingsOpen ? 0 : _settings.ClickMarginPx)) / 2.0;
+        Logger.Info($"[CLICK] 창에 도달. speed={speed:0} dist={dist:0} hitR={hitR:0} " +
+                    $"settingsOpen={SettingsOpen} → {(dist <= hitR ? "잡기 시작" : "반경 밖")}");
+    }
+
     private void CatchToCursor()
     {
         // 숨긴 상태에서는 아무것도 하지 않는다. 예전에는 여기서 SlimeVisible 을 켜 버려서,
@@ -572,6 +603,7 @@ public partial class SlimeWindow : Window
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var c = CursorPhysical();
+        LogClickReachedWindow(c);
         if (IsCueMode)
         {
             if (InSpinCircle(c)) BeginSpinDrag(c); // 공 안쪽 클릭 → 스핀 점 이동
