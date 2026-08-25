@@ -88,6 +88,10 @@ public sealed class SlimePhysicsEngine
     /// 벽과 거의 나란한 방향이 나오면 다음 substep 에서 곧바로 또 부딪혀 벽을 따라 떨기 때문.</summary>
     private const double MinExitAngleDeg = 10.0;
 
+    /// <summary>이 각(deg) 안쪽으로 정면에 가깝게 맞으면 "벽을 따라 가던 쪽"이 없다고 보고
+    /// 좌우를 무작위로 정한다. 그러지 않으면 정면 충돌이 늘 한쪽으로만 꺾인다.</summary>
+    private const double HeadOnDeg = 2.0;
+
     private readonly Random _rng = new();
 
     public SlimePhysicsEngine(AppSettings settings, IWalkableArea area)
@@ -322,8 +326,15 @@ public sealed class SlimePhysicsEngine
         double spread = RandomBounceSpreadDeg * Math.PI / 180.0;
         double phi = Math.Atan2(tang, along);   // 반사 방향이 법선과 이루는 각(부호 있음)
 
-        double lo = Math.Max(phi - spread, -limit);
-        double hi = Math.Min(phi + spread, limit);
+        // 벽을 따라 가던 쪽(좌우 또는 상하)은 그대로 두고 각도만 흔든다. 부호까지 뒤집히면
+        // 오른쪽으로 날아가던 공이 바닥을 맞고 왼쪽으로 되돌아와, 튕긴 게 아니라 되돌아온 것처럼 보인다.
+        // 정면에 가깝게 맞으면 따라가던 쪽이랄 게 없으므로 좌우 중 무작위로 정한다.
+        double sign = Math.Abs(phi) < HeadOnDeg * Math.PI / 180.0
+            ? (_rng.Next(2) == 0 ? -1.0 : 1.0)
+            : Math.Sign(phi);
+
+        double lo = sign > 0 ? Math.Max(phi - spread, 0.0) : Math.Max(phi - spread, -limit);
+        double hi = sign > 0 ? Math.Min(phi + spread, limit) : Math.Min(phi + spread, 0.0);
         // 반사 방향 자체가 이미 허용 범위 밖(벽을 거의 스침)이면 가장 가까운 합법 각으로 붙인다.
         double theta = hi > lo ? lo + _rng.NextDouble() * (hi - lo)
                               : Math.Clamp(phi, -limit, limit);
