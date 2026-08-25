@@ -111,6 +111,13 @@ public sealed class SlimePhysicsEngine
     {
         bool gravity = GravityY != 0.0;
 
+        // 무효한 자리에서 시작하면 어느 축으로도 유효한 이동이 없어 그 자리에 박힌다.
+        // 들어온 경로(드래그·모니터 구성 변경·DPI 변경·핸드오프)와 무관하게 여기서 되돌린다.
+        // 멀티 PC 에서 연결된 엣지를 넘어가는 중이면 그 좌표는 애초에 유효로 판정되므로 걸리지 않는다.
+        if (!Area.IsRectValid(RectFor(Position.X, Position.Y))
+            && TryFindValidNear(Position, out Vector2 rescued))
+            Position = rescued;
+
         // 이동도 회전도 표면스핀도 없을 때만 완전 정지로 간주.
         // 중력이 있으면 "바닥에 닿아 있을 때"만 정지(공중에 멈춘 공은 낙하해야 함).
         if (dt <= 0 || (IsAtRest
@@ -344,12 +351,47 @@ public sealed class SlimePhysicsEngine
         return (isXAxis ? Position.X : Position.Y) + lo;
     }
 
-    /// <summary>드래그 등 직접 배치 시 가상 데스크톱 밖으로 나가지 않게 클램프.</summary>
+    /// <summary>
+    /// 무효한 자리에서 가장 가까운 유효 자리를 고리를 넓혀가며 찾는다.
+    /// 가까운 고리부터 훑으므로 먼저 걸린 것이 사실상 최근접이다.
+    /// </summary>
+    private bool TryFindValidNear(Vector2 from, out Vector2 found)
+    {
+        found = from;
+        if (Area.IsRectValid(RectFor(from.X, from.Y))) return true;
+
+        const double step = 4.0;
+        const double maxRadius = 480.0;
+        for (double r = step; r <= maxRadius; r += step)
+        {
+            for (int deg = 0; deg < 360; deg += 12)
+            {
+                double a = deg * Math.PI / 180.0;
+                double x = from.X + Math.Cos(a) * r;
+                double y = from.Y + Math.Sin(a) * r;
+                if (Area.IsRectValid(RectFor(x, y)))
+                {
+                    found = new Vector2(x, y);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>드래그 등 직접 배치 시 유효한 자리에 놓는다.
+    ///
+    /// 가상 데스크톱 사각형은 모니터들의 합집합이 아니다 — 높이가 어긋난 모니터가 하나라도 있으면
+    /// 위쪽에 어느 모니터에도 속하지 않는 띠가 생긴다(실측: 3번 모니터가 19px 위로 어긋난 배치에서
+    /// y −19..0 구간). 거기에 놓인 공은 어느 축으로도 유효한 이동이 없어 <see cref="ResolveContact"/>
+    /// 가 매번 0 을 돌려주고, 그 자리에 박힌 채 반발로 속도만 죽는다.
+    /// 그래서 사각형으로 자른 뒤 반드시 유효한 자리까지 끌어온다.</summary>
     public void SetPositionClamped(Vector2 pos)
     {
         Rect vb = Area.VirtualBounds;
         double x = Math.Clamp(pos.X, vb.Left, Math.Max(vb.Left, vb.Right - _settings.SlimeSize));
         double y = Math.Clamp(pos.Y, vb.Top, Math.Max(vb.Top, vb.Bottom - _settings.SlimeSize));
-        Position = new Vector2(x, y);
+        var clamped = new Vector2(x, y);
+        Position = TryFindValidNear(clamped, out Vector2 valid) ? valid : clamped;
     }
 }

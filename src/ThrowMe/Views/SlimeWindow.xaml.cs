@@ -474,7 +474,7 @@ public partial class SlimeWindow : Window
     /// <summary>젤리가 벽에 튈 때 반사 방향을 좌우로 흔드는 최대 각도(deg).
     /// 입사각을 아직 알아볼 수 있는 한계선이다 — 더 벌리면 벽 안쪽 반원 전체와 같아져
     /// 어느 방향에서 던졌든 결과 분포가 같아진다(= 입사각 무시).</summary>
-    private const double JellyBounceSpreadDeg = 75.0;
+    private const double JellyBounceSpreadDeg = 70.0;
 
     /// <summary>농구공 던지기 감쇠(마우스 속도 대비). 살살 던져지도록.</summary>
     private const double BasketballThrowScale = 0.55;
