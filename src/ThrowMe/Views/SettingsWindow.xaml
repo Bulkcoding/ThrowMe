@@ -656,10 +656,12 @@
                                 <StackPanel>
 
                                 <Grid Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="멀티 PC 사용" Style="{StaticResource RowLabel}"/>
-                                                    <TextBlock x:Name="NetStatus" Style="{StaticResource InfoIcon}" ToolTip="꺼짐"/>
-                                                </StackPanel>
+                                    <!-- NetStatus 는 설명이 아니라 코드가 갱신하는 '현재 연결 상태' 다.
+                                         ⓘ 아이콘으로 바꾸면 아이콘 글꼴로 한글이 렌더돼 □□ 로 보인다. -->
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="멀티 PC 사용" Style="{StaticResource RowLabel}"/>
+                                        <TextBlock x:Name="NetStatus" Text="꺼짐" Style="{StaticResource RowDesc}"/>
+                                    </StackPanel>
                                     <CheckBox x:Name="NetEnabled" Grid.Column="1" Style="{StaticResource Toggle}"/>
                                 </Grid>
 
