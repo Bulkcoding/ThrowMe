@@ -373,7 +373,8 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button x:Name="CatchModBtn" Style="{StaticResource GhostButton}"
                                             MinWidth="104" Click="OnRebindCatchMod"/>
-                                    <TextBlock Text="+" VerticalAlignment="Center" Margin="8,0" Opacity="0.45"/>
+                                    <TextBlock Text="+" VerticalAlignment="Center" Margin="8,0"
+                                               Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
                                     <Button x:Name="CatchKeyBtn" Style="{StaticResource GhostButton}"
                                             MinWidth="104" Click="OnRebindCatchKey"/>
                                 </StackPanel>
@@ -398,13 +399,20 @@
                                     <TextBlock Text="바람 단축키 (기본 Ctrl + Space)" Style="{StaticResource RowLabel}"/>
                                     <TextBlock Text="종이비행기가 날고 있을 때 누르면 아래에서 바람이 불어 더 오래 활공합니다."
                                                Style="{StaticResource RowDesc}"/>
-                                    <TextBlock Text="Ctrl 은 고정이며 뒤에 붙는 키만 바꿀 수 있습니다. 날고 있는 동안에만 잡으므로 평소에는 다른 앱이 그대로 씁니다."
-                                               Style="{StaticResource RowDesc}"/>
+                                    <TextBlock Text="왼쪽 Ctrl 칸은 고정이라 바꿀 수 없고, 오른쪽 칸만 누르면 키를 바꿀 수 있습니다. 날고 있는 동안에만 잡으므로 평소에는 다른 앱이 그대로 씁니다."
+                                               Style="{StaticResource RowDesc}" TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <TextBlock Grid.Column="1" Text="Ctrl +" VerticalAlignment="Center"
-                                           Opacity="0.45" Margin="0,0,8,0"/>
-                                <Button Grid.Column="2" x:Name="WindKeyBtn" Style="{StaticResource GhostButton}"
-                                        MinWidth="120" VerticalAlignment="Center" Click="OnRebindWindKey"/>
+                                <StackPanel Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <!-- 수정자 칸은 Ctrl 고정 — 잡기·숨기기와 같은 모양으로 두되 누를 수 없게 한다. -->
+                                    <Button x:Name="WindModBtn" Style="{StaticResource GhostButton}"
+                                            MinWidth="104" Content="Ctrl" IsEnabled="False" Opacity="0.6"
+                                            ToolTip="바람 단축키의 수정자는 Ctrl 로 고정입니다."/>
+                                    <TextBlock Text="+" VerticalAlignment="Center" Margin="8,0"
+                                               Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                                    <Button x:Name="WindKeyBtn" Style="{StaticResource GhostButton}"
+                                            MinWidth="104" Click="OnRebindWindKey"/>
+                                </StackPanel>
                             </Grid>
 
                             <TextBlock Text="빠르게 숨기기" Style="{StaticResource Section}"/>
@@ -418,7 +426,8 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button x:Name="HideModBtn" Style="{StaticResource GhostButton}"
                                             MinWidth="104" Click="OnRebindHideMod"/>
-                                    <TextBlock Text="+" VerticalAlignment="Center" Margin="8,0" Opacity="0.45"/>
+                                    <TextBlock Text="+" VerticalAlignment="Center" Margin="8,0"
+                                               Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
                                     <Button x:Name="HideKeyBtn" Style="{StaticResource GhostButton}"
                                             MinWidth="104" Click="OnRebindHideKey"/>
                                 </StackPanel>
