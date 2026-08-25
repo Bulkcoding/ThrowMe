@@ -123,13 +123,13 @@ public partial class SettingsWindow : Window
         SlowdownRow.IsEnabled = !locked;
         SlowdownRow.Opacity = locked ? 0.45 : 1.0;
         SlowdownDesc.Text = locked
-            ? "무한 튕기기가 켜져 있어 0 으로 고정됩니다. 조절하려면 무한 튕기기를 끄세요."
-            : "날아가던 공이 느려지는 정도입니다. 낮출수록 속도를 오래 유지해 멀리 날아가고, 높이면 금방 멈춥니다.";
+            ? "무한 튕기기가 켜져 있어 0 으로 고정됩니다."
+            : "날아가던 공이 느려지는 정도입니다.";
 
         RestitutionRow.IsEnabled = !locked;
         RestitutionRow.Opacity = locked ? 0.45 : 1.0;
         RestitutionDesc.Text = locked
-            ? "무한 튕기기가 켜져 있어 100% 로 고정됩니다. 조절하려면 무한 튕기기를 끄세요."
+            ? "무한 튕기기가 켜져 있어 100% 로 고정됩니다."
             : "벽에 튕기는 반발력.";
     }
 
@@ -298,6 +298,9 @@ public partial class SettingsWindow : Window
             Child = stack,
         };
     }
+
+    /// <summary>업데이트 카드의 버튼 → 업데이트 노트 탭으로 이동.</summary>
+    private void OnGoToNotes(object sender, RoutedEventArgs e) => Nav.SelectedIndex = 5;
 
     private void OnResetPosition(object sender, RoutedEventArgs e) => _slime.ResetPositionPublic();
 

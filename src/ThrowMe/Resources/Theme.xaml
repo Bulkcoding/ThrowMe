@@ -99,6 +99,104 @@
         <Setter Property="HorizontalAlignment" Value="Right"/>
     </Style>
 
+    <!-- ═══════════════ 카드(패널) ═══════════════ -->
+    <!-- 설정 항목을 주제별 카드로 묶는다. 예전에는 한 줄로 쭉 나열해 어디까지가
+         한 묶음인지 보이지 않았다. 카드 배경은 창보다 한 톤 밝고 얇은 테두리를 둔다. -->
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Background" Value="#212127"/>
+        <Setter Property="BorderBrush" Value="#32323B"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="18,16"/>
+        <Setter Property="Margin" Value="0,0,0,14"/>
+    </Style>
+
+    <!-- 카드 제목 앞의 아이콘. Windows 기본 아이콘 글꼴을 쓴다(별도 리소스 불필요). -->
+    <Style x:Key="CardIcon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+        <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="Margin" Value="0,0,9,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="CardTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- 카드 안 항목 사이의 얇은 구분선 -->
+    <Style x:Key="RowDivider" TargetType="Border">
+        <Setter Property="Height" Value="1"/>
+        <Setter Property="Background" Value="#2B2B33"/>
+        <Setter Property="Margin" Value="0,13"/>
+    </Style>
+
+    <!-- 사이드바 항목 앞 아이콘 -->
+    <Style x:Key="NavIcon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="Width" Value="22"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- 버튼 안에 넣는 아이콘 -->
+    <Style x:Key="BtnIcon" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Margin" Value="0,0,7,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- 테두리만 있는 버튼(카드 안 동작 버튼용) -->
+    <Style x:Key="OutlineButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Padding" Value="18,10"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="9" Background="#1A1A1F"
+                            BorderBrush="#3C3C46" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{StaticResource HoverBg}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 되돌릴 수 없는 동작(설정 초기화)용. 주황 테두리로 무게를 준다. -->
+    <Style x:Key="AccentOutlineButton" TargetType="Button" BasedOn="{StaticResource OutlineButton}">
+        <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="9" Background="#1F1613"
+                            BorderBrush="{StaticResource Accent}" BorderThickness="1" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="#2A1C17"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ═══════════════ 네비게이션 항목 ═══════════════ -->
     <Style x:Key="NavItem" TargetType="ListBoxItem">
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -110,7 +208,12 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
                     <Border x:Name="bd" CornerRadius="8" Background="Transparent" Padding="{TemplateBinding Padding}">
-                        <ContentPresenter VerticalAlignment="Center"/>
+                        <Grid>
+                            <!-- 선택된 항목의 왼쪽 주황 막대 -->
+                            <Border x:Name="bar" Width="3" CornerRadius="2" Background="{StaticResource Accent}"
+                                    HorizontalAlignment="Left" Margin="-8,2,0,2" Visibility="Collapsed"/>
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -118,6 +221,7 @@
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="{StaticResource HoverBg}"/>
+                            <Setter TargetName="bar" Property="Visibility" Value="Visible"/>
                             <Setter Property="Foreground" Value="{StaticResource Accent}"/>
                             <Setter Property="FontWeight" Value="SemiBold"/>
                         </Trigger>
