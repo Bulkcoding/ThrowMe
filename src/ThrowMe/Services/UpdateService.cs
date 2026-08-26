@@ -33,35 +33,113 @@ public static class UpdateService
     /// <summary>apply.cmd 가 남기는 교체 결과("ok" 또는 "fail &lt;errorlevel&gt;").</summary>
     private static string ApplyResult => Path.Combine(StageDir, "apply_result.txt");
 
-    /// <summary>교체에 실패한 버전과 시각. 이 버전은 잠시 재시도하지 않는다(무한 재시작 방지).</summary>
+    /// <summary>
+    /// 교체에 실패한 기록(버전\n시각\n연속 실패 횟수). 무한 재시작 방지용.
+    /// <b>버전이 아니라 이 PC 단위</b>로 본다 — 예전에는 실패한 버전만 막아서, 새 릴리스가
+    /// 올라오면 "다른 버전이니 다시 해 보자"며 방어가 풀렸다. 원인(덮어쓰기 불가)은 그대로인데
+    /// 릴리스를 낼 때마다 160MB 다운로드와 재시작이 한 바퀴씩 다시 돌았다.
+    /// </summary>
     private static string ApplyBlocked => Path.Combine(StageDir, "apply_blocked.txt");
 
     /// <summary>실패한 교체를 다시 시도해 보기까지 기다리는 시간. 그 사이 권한·백신을 손볼 수 있다.</summary>
     private static readonly TimeSpan BlockRetryAfter = TimeSpan.FromHours(24);
 
+    /// <summary>이만큼 연속으로 실패하면 시간이 지나도 자동 재시도를 하지 않는다(수동 교체 안내).</summary>
+    private const int HardBlockAfterFailures = 2;
+
+    /// <summary>기록된 연속 실패 횟수. 기록이 없으면 0.</summary>
+    private static int BlockedFailureCount
+    {
+        get
+        {
+            try
+            {
+                if (!File.Exists(ApplyBlocked)) return 0;
+                string[] lines = File.ReadAllText(ApplyBlocked).Split('\n');
+                // 3번째 줄이 없으면 옛 형식(2줄) — 1회 실패로 본다.
+                if (lines.Length > 2 && int.TryParse(lines[2].Trim(), out int n)) return Math.Max(1, n);
+                return 1;
+            }
+            catch { return 0; }
+        }
+    }
+
     /// <summary>
-    /// 이 버전으로의 교체가 최근에 실패했는가. 실패한 지 <see cref="BlockRetryAfter"/> 가 지나면
-    /// 다시 시도하게 둔다 — 사용자가 그 사이 권한이나 백신 예외를 고쳤을 수 있다.
+    /// 지금 이 PC 에서 자동 교체가 막혀 있는가. 버전과 무관하다.
+    ///
+    /// 한 번 실패했을 때는 <see cref="BlockRetryAfter"/> 뒤에 한 번 더 해 본다
+    /// (그 사이 사용자가 권한이나 백신 예외를 고쳤을 수 있다).
+    /// <see cref="HardBlockAfterFailures"/> 회 연속 실패하면 자동 시도를 아예 멈춘다 —
+    /// 그 PC 는 구조적으로 덮어쓸 수 없는 자리에 있는 것이므로, 계속 두면 매번 무한 재시작이 된다.
     /// </summary>
-    private static bool IsApplyBlocked(Version pv)
+    private static bool IsApplyBlockedNow()
     {
         try
         {
             if (!File.Exists(ApplyBlocked)) return false;
-            string[] lines = File.ReadAllText(ApplyBlocked).Split('\n');
-            if (!Version.TryParse(lines[0].Trim(), out var blocked)) return false;
-            if (Normalize(blocked) != Normalize(pv)) return false;   // 다른(더 새) 버전이면 다시 해 본다
 
+            if (BlockedFailureCount >= HardBlockAfterFailures) return true;
+
+            string[] lines = File.ReadAllText(ApplyBlocked).Split('\n');
             if (lines.Length > 1 && DateTime.TryParse(lines[1].Trim(), out var at)
                 && DateTime.Now - at > BlockRetryAfter)
             {
-                Logger.Info($"Retrying update v{pv} after previous failure.");
+                Logger.Info("Retrying update after previous failure (24h passed).");
                 try { File.Delete(ApplyBlocked); } catch { }
                 return false;
             }
             return true;
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// 사용자가 직접 새 exe 로 갈아 끼웠으면 막아 둔 것을 푼다.
+    /// 수동 교체는 <see cref="ApplyAttempt"/> 를 남기지 않으므로, 이걸 안 하면
+    /// 손으로 고친 뒤에도 자동 업데이트가 영영 꺼진 채로 남는다.
+    /// </summary>
+    public static void ClearBlockIfSelfUpdated()
+    {
+        try
+        {
+            var blocked = BlockedVersion;
+            if (blocked == null || Current < Normalize(blocked)) return;
+
+            Logger.Info($"Update block cleared — 지금 실행 중인 v{Current.ToString(3)} 가 " +
+                        $"막아 둔 v{blocked.ToString(3)} 이상입니다(수동 교체로 보입니다).");
+            try { File.Delete(ApplyBlocked); } catch { }
+            try { if (File.Exists(BlockedNotified)) File.Delete(BlockedNotified); } catch { }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// 실행 파일을 덮어쓸 수 있는 자리에 있는가(다운로드 전에 확인).
+    ///
+    /// Program Files 처럼 쓰기가 막힌 폴더에서 실행 중이면 교체는 무조건 실패한다.
+    /// 그걸 모르고 160MB 를 먼저 받으면 "받고 → 실패 → 재시작" 만 반복한다.
+    /// 폴더에 쓸 수 있다고 교체까지 보장되지는 않지만(백신이 exe 만 막을 수 있다),
+    /// 확실히 안 되는 경우를 받기 전에 걸러 준다.
+    /// </summary>
+    public static bool CanReplaceSelf(out string reason)
+    {
+        try
+        {
+            string? target = Process.GetCurrentProcess().MainModule?.FileName;
+            string? dir = string.IsNullOrEmpty(target) ? null : Path.GetDirectoryName(target);
+            if (string.IsNullOrEmpty(dir)) { reason = "실행 파일 경로를 알 수 없음"; return false; }
+
+            string probe = Path.Combine(dir, ".throwme_write_test");
+            File.WriteAllText(probe, "ok");
+            File.Delete(probe);
+            reason = "";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            reason = $"{ex.GetType().Name}: {ex.Message}";
+            return false;
+        }
     }
 
     /// <summary>
@@ -136,9 +214,9 @@ public static class UpdateService
             // 직전에 이 버전으로 교체하다 실패했다면 곧바로 또 시도하지 않는다.
             // 재시도하면 "실행 → 교체 실패 → 재시작" 이 무한히 도는 꼴이 된다.
             // 사용자가 권한·백신을 손볼 시간을 주고 하루 뒤에 한 번 더 해 본다.
-            if (IsApplyBlocked(pv))
+            if (IsApplyBlockedNow())
             {
-                Logger.Info($"Skipping apply of v{pv} — 직전 교체가 실패해 잠시 보류 중입니다.");
+                Logger.Info($"Skipping apply of v{pv} — 이 PC 에서 교체가 {BlockedFailureCount}회 실패해 보류 중입니다.");
                 return false;
             }
 
@@ -221,10 +299,13 @@ public static class UpdateService
                 return;
             }
 
-            // 실패. 이 버전은 당분간 재시도하지 않는다 — 안 그러면 실행할 때마다
+            // 실패. 당분간 재시도하지 않는다 — 안 그러면 실행할 때마다
             // "교체 시도 → 실패 → 재시작" 이 무한히 돈다. 받아 둔 파일은 apply.cmd 가
             // 남겨 두었으므로 다시 받을 필요는 없다.
-            try { File.WriteAllText(ApplyBlocked, $"{attempted}\n{DateTime.Now:O}"); } catch { }
+            // 연속 실패 횟수를 함께 센다. HardBlockAfterFailures 회를 넘기면 시간이 지나도
+            // 자동 재시도를 하지 않는다(그 PC 는 구조적으로 덮어쓸 수 없는 자리에 있는 것이다).
+            int fails = BlockedFailureCount + 1;
+            try { File.WriteAllText(ApplyBlocked, $"{attempted}\n{DateTime.Now:O}\n{fails}"); } catch { }
 
             // 실패. 원인 후보를 함께 남겨 둔다 — 대부분 대상 폴더에 쓰기가 막힌 경우다.
             string writable = "unknown";
@@ -241,10 +322,12 @@ public static class UpdateService
             }
             catch (Exception ex) { writable = $"no ({ex.GetType().Name})"; }
 
+            string hold = fails >= HardBlockAfterFailures
+                ? "연속 실패가 쌓여 자동 재시도를 멈춥니다(직접 받아 교체해야 합니다)."
+                : $"{BlockRetryAfter.TotalHours}시간 동안 재시도를 보류합니다.";
             Logger.Error($"Update did NOT apply. expected v{attempted} but running v{Current.ToString(3)}. " +
                          $"apply result: {result}. target='{target}', target folder writable={writable}. " +
-                         "실행 파일을 덮어쓰지 못했습니다(권한/백신 가능성). " +
-                         $"{BlockRetryAfter.TotalHours}시간 동안 재시도를 보류합니다.");
+                         $"실행 파일을 덮어쓰지 못했습니다(권한/백신 가능성). 연속 실패 {fails}회. {hold}");
         }
         catch (Exception ex) { Logger.Error("Apply-result check failed.", ex); }
     }
@@ -267,11 +350,19 @@ public static class UpdateService
             Version? latest = await FetchLatestTagAsync();
             if (latest == null || latest <= Current) return;
 
-            // 교체가 막힌 버전이면 다시 받지 않는다. 예전에는 실패할 때마다 같은 파일을
-            // 매 실행 새로 받아(160MB) 진행 팝업만 반복됐다.
-            if (Normalize(latest) == Normalize(BlockedVersion ?? new Version(0, 0, 0, 0)))
+            // 이 PC 에서 교체가 막혀 있으면 버전과 무관하게 받지 않는다. 예전에는 실패한 버전만
+            // 막아서, 새 릴리스가 나올 때마다 160MB 를 다시 받고 재시작을 한 바퀴씩 돌았다.
+            if (IsApplyBlockedNow())
             {
-                Logger.Info($"Skipping download of v{latest} — 교체가 막혀 보류 중입니다.");
+                Logger.Info($"Skipping download of v{latest} — 이 PC 에서 교체가 막혀 보류 중입니다.");
+                return;
+            }
+
+            // 덮어쓸 수 없는 자리에서 실행 중이면 받아 봐야 소용없다. 받기 전에 거른다.
+            if (!CanReplaceSelf(out string why))
+            {
+                Logger.Error($"Skipping download of v{latest} — 실행 파일 폴더에 쓸 수 없습니다({why}). " +
+                             "쓰기 가능한 폴더로 옮기거나 직접 받아 교체해야 합니다.");
                 return;
             }
 
@@ -343,9 +434,10 @@ public static class UpdateService
         Version? latest = await FetchLatestTagAsync();
         if (latest == null || latest <= Current) return null;
 
-        // 막힌 버전이면 "새 버전 있음"으로 보고하지 않는다 → 진행 팝업이 뜨지 않는다.
-        var blocked = BlockedVersion;
-        if (blocked != null && Normalize(blocked) == Normalize(latest)) return null;
+        // 이 PC 에서 교체가 막혀 있거나 덮어쓸 수 없는 자리면 "새 버전 있음"으로 보고하지 않는다
+        // → 진행 팝업이 뜨지 않고, 받지도 않는다.
+        if (IsApplyBlockedNow()) return null;
+        if (!CanReplaceSelf(out _)) return null;
 
         return latest;
     }

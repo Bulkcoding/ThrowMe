@@ -97,6 +97,8 @@ public partial class App : Application
 
         LogEnvironment();
         UpdateService.LogPreviousApplyResult();
+        // 손으로 새 exe 를 덮어썼다면 막아 둔 것을 풀어 자동 업데이트를 되살린다.
+        UpdateService.ClearBlockIfSelfUpdated();
         NotifyBlockedUpdateOnce();
 
         // 이전 실행에서 받아 둔 업데이트가 있으면, 창을 만들기 전에 교체·재시작하고 즉시 종료.
@@ -152,20 +154,33 @@ public partial class App : Application
     {
         try
         {
+            string title, body;
             var blocked = UpdateService.BlockedVersion;
-            if (blocked == null || !UpdateService.ShouldNotifyBlocked(blocked)) return;
+
+            if (blocked != null)
+            {
+                if (!UpdateService.ShouldNotifyBlocked(blocked)) return;
+                title = $"업데이트를 적용하지 못했어요 (v{blocked.ToString(3)})";
+                body = "실행 파일을 덮어쓰지 못했습니다. 백신 예외에 넣거나, ThrowMe.exe 를 쓰기 가능한 폴더로 " +
+                       "옮겨 주세요. 그때까지 자동 업데이트는 쉽니다.";
+            }
+            else if (!UpdateService.CanReplaceSelf(out _))
+            {
+                // 아직 실패한 적은 없지만 애초에 덮어쓸 수 없는 자리다. 받기 전에 알려 준다
+                // — 안 그러면 조용히 구버전에 머물게 된다.
+                if (!UpdateService.ShouldNotifyBlocked(UpdateService.Current)) return;
+                title = "자동 업데이트를 쓸 수 없어요";
+                body = "지금 폴더에는 ThrowMe.exe 를 덮어쓸 수 없습니다. 쓰기 가능한 폴더(예: C:\\ThrowMe)로 " +
+                       "옮기면 자동으로 최신 버전을 받습니다.";
+            }
+            else return;
 
             // 창이 아직 없으므로 잠깐 뒤에 띄운다(토스트도 창이다).
             var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             t.Tick += (_, _) =>
             {
                 t.Stop();
-                try
-                {
-                    ToastWindow.Show($"업데이트를 적용하지 못했어요 (v{blocked.ToString(3)})",
-                        "실행 파일을 덮어쓰지 못했습니다. 백신 예외에 넣거나, ThrowMe.exe 를 쓰기 가능한 폴더로 옮겨 주세요.",
-                        9);
-                }
+                try { ToastWindow.Show(title, body, 12); }
                 catch (Exception ex) { Logger.Error("Blocked-update toast failed.", ex); }
             };
             t.Start();
