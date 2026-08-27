@@ -662,7 +662,12 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="14"/>
                                             </Grid.ColumnDefinitions>
+                                            <!-- 글자색을 여기서 직접 준다. ComboBox 의 Foreground 는
+                                                 ToggleButton 안쪽 ContentPresenter 까지 내려오지 않아
+                                                 닫힌 상태의 글자가 검게 나온다(펼친 목록만 밝았던 이유). -->
                                             <ContentPresenter Grid.Column="0" VerticalAlignment="Center"
+                                                TextElement.Foreground="{StaticResource TextBrush}"
+                                                TextBlock.Foreground="{StaticResource TextBrush}"
                                                 Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"/>
                                             <Path Grid.Column="1" Data="M0,0 L4,4 L8,0" Stroke="{StaticResource MutedBrush}"
                                                   StrokeThickness="1.4" VerticalAlignment="Center" HorizontalAlignment="Center"/>

@@ -69,8 +69,21 @@ public partial class SlimeWindow
     // 일정 속도로 미끄러지면 기어가는 게 아니라 떠다니는 것처럼 보인다.
     // 사람이 한 발 내딛고 멈추듯, 모았다가 쭉 뻗고 다시 멈추기를 반복한다.
 
-    /// <summary>한 걸음의 주기(초).</summary>
-    private const double StepPeriod = 1.15;
+    /// <summary>
+    /// 한 걸음에 나아가는 거리(공 지름 대비). <b>속도를 올려도 이 보폭은 그대로다</b> —
+    /// 대신 걸음이 빨라진다. 보폭이 늘어나면 기어가는 게 아니라 껑충 뛰는 모양이 된다.
+    /// </summary>
+    private const double StepDistanceFactor = 0.22;
+
+    /// <summary>걸음 주기의 하한·상한(초).</summary>
+    private const double StepPeriodMin = 0.22, StepPeriodMax = 3.0;
+
+    /// <summary>목표 속도에 맞는 걸음 주기. 빠를수록 짧아진다(보폭은 고정).</summary>
+    private double StepPeriodFor(double speed)
+    {
+        double stepDist = _settings.SlimeSize * StepDistanceFactor;
+        return Math.Clamp(stepDist / Math.Max(1.0, speed), StepPeriodMin, StepPeriodMax);
+    }
 
     /// <summary>주기 안에서 실제로 밀고 나가는 구간(0~1). 나머지는 모으거나 멈춰 있다.</summary>
     private const double LungeFrom = 0.30, LungeTo = 0.68;
@@ -115,10 +128,10 @@ public partial class SlimeWindow
     }
 
     /// <summary>걸음 주기를 진행시킨다. 한 걸음이 끝나면 true.</summary>
-    private bool AdvanceStep(double dt)
+    private bool AdvanceStep(double dt, double period)
     {
         bool finished = false;
-        _stepPhase += dt / StepPeriod;
+        _stepPhase += dt / Math.Max(0.05, period);
         while (_stepPhase >= 1.0) { _stepPhase -= 1.0; finished = true; }
         _lunge = LungeCurve(_stepPhase);
         return finished;
@@ -296,7 +309,7 @@ public partial class SlimeWindow
     private void TickRoam(double dt, double speed)
     {
         // 방향은 걸음과 걸음 사이(멈춰 있을 때)에만 튼다 — 뻗는 도중에 꺾이면 미끄러져 보인다.
-        bool stepDone = AdvanceStep(dt);
+        bool stepDone = AdvanceStep(dt, StepPeriodFor(speed));
         double now = Now;
         if (stepDone && now >= _autoTurnAt)
         {
@@ -339,7 +352,7 @@ public partial class SlimeWindow
     /// <summary>중력으로 화면 아래(작업표시줄 위)에 붙어 좌우로만 걷는다.</summary>
     private void TickTaskbarWalk(double dt, double speed)
     {
-        bool stepDone = AdvanceStep(dt);
+        bool stepDone = AdvanceStep(dt, StepPeriodFor(speed));
         double now = Now;
         if (stepDone && now >= _autoTurnAt)
         {
@@ -370,11 +383,6 @@ public partial class SlimeWindow
     /// <summary>커서의 오른쪽 아래를 목표로 천천히 따라간다.</summary>
     private void TickCursorFollow(double dt, double speed)
     {
-        // 따라다닐 때는 걸음으로 뚝뚝 끊지 않는다 — 커서를 놓치면 안 되므로 부드럽게 쫓는다.
-        // 대신 눌린 몸과 진행 방향 기울기는 그대로 준다.
-        _stepPhase = 0;
-        _lunge = 0;
-
         if (!GetCursorPos(out var p))
         {
             _physics.Propulsion = Vector2.Zero;
@@ -383,30 +391,102 @@ public partial class SlimeWindow
         }
 
         double s = _settings.SlimeSize;
-        int cur = Math.Max(16, GetSystemMetrics(SM_CXCURSOR));
-
-        // 커서 바로 오른쪽 아래 대각선. 커서 크기만큼 비켜서고, 공 중심이 그 자리에 오게 한다.
-        Vector2 target = new(p.X + cur * 0.6 + s * CursorOffsetFactor,
-                             p.Y + cur * 0.6 + s * CursorOffsetFactor);
-
+        Vector2 cursor = new(p.X, p.Y);
         Vector2 center = _physics.Position + new Vector2(s / 2, s / 2);
+
+        if (_settings.CursorFollowStyle == CursorFollowStyle.Keyring)
+        {
+            TickKeyring(dt, cursor, center, s);
+            return;
+        }
+
+        int cur = Math.Max(16, GetSystemMetrics(SM_CXCURSOR));
+        // 커서 바로 오른쪽 아래 대각선. 커서 크기만큼 비켜서고, 공 중심이 그 자리에 오게 한다.
+        Vector2 target = new(cursor.X + cur * 0.6 + s * CursorOffsetFactor,
+                             cursor.Y + cur * 0.6 + s * CursorOffsetFactor);
         Vector2 delta = target - center;
         double dist = delta.Length;
-        if (dist < 2.0)
+
+        // 멀수록 걸음을 빨리 놓는다. 보폭을 늘리는 게 아니라 <b>걸음이 빨라진다</b> —
+        // 같은 속도로 쭉 미끄러져 오면 따라오는 게 아니라 끌려오는 것처럼 보인다.
+        double urgency = Math.Clamp(dist / Math.Max(1.0, s * 1.5), 0.6, 5.0);
+        bool stepDone = AdvanceStep(dt, StepPeriodFor(speed * urgency));
+
+        if (dist < s * 0.25)
         {
-            _physics.Propulsion = Vector2.Zero;
+            // 다 왔으면 멈춰 선다(제자리에서 계속 걷지 않게).
+            _physics.Propulsion = SteerTo(Vector2.Zero);
             ApplyCrawlShape(0, 0, 0);
             return;
         }
 
-        // 멀수록 빠르게 쫓는다(상한 있음) → 커서를 홱 옮겨도 따라붙고, 가까우면 살살 다가간다.
-        double boost = Math.Min(6.0, dist / Math.Max(1.0, s * 0.5));
-        _physics.Propulsion = SteerTo(delta.Normalized() * (speed * (1.0 + boost)));
+        Vector2 dir = delta.Normalized();
+        if (stepDone) UpdateFacing(dir.X);
+        // 뻗는 구간에만 민다. 걸음마다 커서 쪽으로 한 번씩 튀어 간다.
+        _physics.Propulsion = SteerTo(dir * (speed * urgency / LungeDuty * _lunge));
+        ApplyCrawlShape(Math.Atan2(dir.Y, dir.X), _lunge, _stepPhase);
+    }
 
-        // 쫓는 세기에 맞춰 늘어난다 — 빨리 갈수록 진행 방향으로 길어진다.
-        double eff = Math.Min(1.0, _physics.Velocity.Length / Math.Max(1.0, speed * 4));
-        // 커서를 쫓을 때는 걸음이 없으므로, 얼마나 빨리 가는지로 컷을 고른다(최대 = 가장 뻗은 컷).
-        if (Math.Abs(delta.X) > s * 0.3) UpdateFacing(delta.X);
-        ApplyCrawlShape(Math.Atan2(delta.Y, delta.X), eff, eff * 0.5);
+    // ── 키링 ────────────────────────────────────────────────
+    /// <summary>커서에 매다는 줄 길이(공 지름 대비).</summary>
+    private const double KeyringRopeFactor = 0.85;
+
+    /// <summary>커서가 빠를수록 뒤로 끌리는 정도(s/px). 커서 속도를 매달린 방향에 섞는 양.</summary>
+    private const double KeyringTrail = 0.0035;
+
+    /// <summary>매달린 방향이 목표 방향을 따라가는 속도(1/s). 낮을수록 크게 흔들린다.</summary>
+    private const double KeyringSwing = 7.0;
+
+    /// <summary>공이 매달릴 자리로 붙는 속도(1/s).</summary>
+    private const double KeyringFollow = 16.0;
+
+    /// <summary>지금 매달려 있는 방향(커서 기준 단위 벡터). 아래가 기본.</summary>
+    private Vector2 _keyringDir = new(0, 1);
+
+    private Vector2 _prevCursor;
+    private bool _hasPrevCursor;
+
+    /// <summary>
+    /// 커서에 매달려 흔들린다. 커서를 움직이면 반대쪽으로 끌려 늘어졌다가, 멈추면 아래로 모인다.
+    ///
+    /// 진자를 물리로 돌려 봤지만 흔들림이 잦아들지 않았다(30초 뒤에도 73도).
+    /// 줄을 힘으로 흉내 내면 멀 때 당기는 힘이 폭발해 화면 밖으로 날아가기도 했다(실측 2037px).
+    /// 그래서 매달릴 자리를 직접 계산해 그쪽으로 붙인다 — 어떤 상황에서도 튀지 않는다.
+    /// </summary>
+    private void TickKeyring(double dt, Vector2 cursor, Vector2 center, double s)
+    {
+        _stepPhase = 0;
+        _lunge = 0;
+        _physics.Propulsion = Vector2.Zero;
+
+        Vector2 cursorVel = Vector2.Zero;
+        if (_hasPrevCursor && dt > 1e-4) cursorVel = (cursor - _prevCursor) / dt;
+        _prevCursor = cursor;
+        _hasPrevCursor = true;
+
+        // 매달릴 방향: 기본은 아래. 커서가 움직이면 그 반대쪽으로 밀려 비스듬해진다.
+        Vector2 want = new Vector2(0, 1) + cursorVel * -KeyringTrail;
+        if (want.LengthSquared < 1e-9) want = new Vector2(0, 1);
+        want = want.Normalized();
+
+        // 방향이 천천히 따라오면서 흔들림(오버슈트)이 생긴다.
+        double turn = 1.0 - Math.Exp(-KeyringSwing * dt);
+        _keyringDir = (_keyringDir + (want - _keyringDir) * turn).Normalized();
+
+        double rope = s * KeyringRopeFactor;
+        Vector2 target = cursor + _keyringDir * rope;
+
+        double follow = 1.0 - Math.Exp(-KeyringFollow * dt);
+        Vector2 next = center + (target - center) * follow;
+
+        Vector2 moved = next - center;
+        _physics.SetPositionClamped(next - new Vector2(s / 2, s / 2));
+        // 속도는 0 이어야 한다. 여기서 위치를 직접 옮겼는데 속도까지 넣으면
+        // 엔진이 이어서 한 번 더 이동시켜, 목표를 지나치며 계속 진동한다.
+        _physics.Velocity = Vector2.Zero;
+
+        double swing = Math.Min(1.0, moved.Length / Math.Max(1.0, s * 0.08));
+        if (Math.Abs(moved.X) > s * 0.01) UpdateFacing(moved.X);
+        ApplyCrawlShape(0, swing, swing * 0.5);
     }
 }

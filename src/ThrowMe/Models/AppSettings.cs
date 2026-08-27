@@ -464,6 +464,14 @@ public sealed class AppSettings : INotifyPropertyChanged
     private string _autoMoveMonitor = "";
     public string AutoMoveMonitor { get => _autoMoveMonitor; set => Set(ref _autoMoveMonitor, value ?? ""); }
 
+    /// <summary>커서 따라가기의 방식(따라오기 / 키링).</summary>
+    private CursorFollowStyle _cursorFollowStyle = CursorFollowStyle.Follow;
+    public CursorFollowStyle CursorFollowStyle
+    {
+        get => _cursorFollowStyle;
+        set => Set(ref _cursorFollowStyle, value);
+    }
+
     /// <summary>커서 따라가기일 때 쓰는 지름(px). 평소 크기와 따로 둔다.</summary>
     private double _cursorFollowSize = 400.0;
     public double CursorFollowSize

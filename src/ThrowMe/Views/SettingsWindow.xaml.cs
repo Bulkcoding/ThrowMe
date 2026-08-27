@@ -784,6 +784,7 @@ public partial class SettingsWindow : Window
         try
         {
             AutoMoveBox.SelectedIndex = (int)_settings.AutoMove;
+            CursorStyleBox.SelectedIndex = (int)_settings.CursorFollowStyle;
 
             AutoMoveMonitorBox.Items.Clear();
             AutoMoveMonitorBox.Items.Add(new ComboBoxItem { Content = "전체 화면", Tag = "" });
@@ -814,6 +815,13 @@ public partial class SettingsWindow : Window
         if (_fillingAutoMove) return;
         int i = AutoMoveBox.SelectedIndex;
         if (i >= 0) _settings.AutoMove = (AutoMoveMode)i;
+    }
+
+    private void OnCursorStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_fillingAutoMove) return;
+        int i = CursorStyleBox.SelectedIndex;
+        if (i >= 0) _settings.CursorFollowStyle = (CursorFollowStyle)i;
     }
 
     private void OnAutoMoveMonitorChanged(object sender, SelectionChangedEventArgs e)

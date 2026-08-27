@@ -307,6 +307,24 @@
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                     <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="따라가는 방식" Style="{StaticResource RowLabel}"/>
+                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="· 따라오기 — 커서 쪽으로 한 걸음씩 뛰어 쫓아옵니다. 멀수록 걸음이 빨라집니다.&#10;· 키링 — 커서에 매달려 흔들립니다. 커서를 움직이면 뒤로 늘어졌다가 아래로 모입니다."/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="커서 따라가기 전용." Style="{StaticResource RowDesc}"/>
+                                                </StackPanel>
+                                                <ComboBox x:Name="CursorStyleBox" Grid.Column="1" VerticalAlignment="Center"
+                                                          Style="{StaticResource DarkCombo}"
+                                                          SelectionChanged="OnCursorStyleChanged">
+                                                    <ComboBoxItem Content="따라오기"/>
+                                                    <ComboBoxItem Content="키링"/>
+                                                </ComboBox>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="따라다닐 때 크기" Style="{StaticResource RowLabel}"/>
                                                         <TextBlock Style="{StaticResource InfoIcon}" ToolTip="커서 따라가기일 때만 쓰는 지름입니다. 평소 크기와 따로 저장됩니다."/>
                                                     </StackPanel>
