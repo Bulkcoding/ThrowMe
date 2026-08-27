@@ -430,14 +430,44 @@ public static class UpdateService
     /// </summary>
     public static async Task<Version?> FindNewerVersionAsync()
     {
-        if (!UpdateConfig.Enabled) return null;
+        // 여기서 null 을 돌려주면 앱은 아무것도 하지 않고 조용히 지나간다. 그래서 왜 안 받았는지를
+        // 갈래마다 남긴다 — 남기지 않으면 "업데이트가 안 된다"는 문의에 로그로 답할 수가 없다.
+        // 시작할 때 한 번만 부르므로 실행당 한 줄이다.
+        if (!UpdateConfig.Enabled)
+        {
+            Logger.Info("Update check: 자동 업데이트가 꺼져 있습니다.");
+            return null;
+        }
+
         Version? latest = await FetchLatestTagAsync();
-        if (latest == null || latest <= Current) return null;
+        if (latest == null)
+        {
+            Logger.Info("Update check: 최신 버전을 확인하지 못했습니다(네트워크 또는 차단).");
+            return null;
+        }
+
+        if (latest <= Current)
+        {
+            // 릴리스를 막 올린 직후에는 여기 걸린다 — 버전 확인에 쓰는 /releases/latest 리다이렉트가
+            // 몇 분 늦게 갱신되기 때문이다(설정의 업데이트 노트는 API 라 즉시 보인다).
+            Logger.Info($"Update check: 최신 v{latest.ToString(3)} / 실행 중 v{Current.ToString(3)} — 받을 것이 없습니다.");
+            return null;
+        }
 
         // 이 PC 에서 교체가 막혀 있거나 덮어쓸 수 없는 자리면 "새 버전 있음"으로 보고하지 않는다
         // → 진행 팝업이 뜨지 않고, 받지도 않는다.
-        if (IsApplyBlockedNow()) return null;
-        if (!CanReplaceSelf(out _)) return null;
+        if (IsApplyBlockedNow())
+        {
+            Logger.Info($"Update check: v{latest.ToString(3)} 가 있지만 이 PC 에서 교체가 " +
+                        $"{BlockedFailureCount}회 연속 실패해 보류 중입니다.");
+            return null;
+        }
+
+        if (!CanReplaceSelf(out string why))
+        {
+            Logger.Info($"Update check: v{latest.ToString(3)} 가 있지만 실행 파일 폴더에 쓸 수 없습니다({why}).");
+            return null;
+        }
 
         return latest;
     }
