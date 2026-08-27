@@ -6,21 +6,53 @@
     <Viewbox Stretch="Uniform">
         <Grid Width="96" Height="96">
 
-            <!-- 젤리 본체 (민트→보라 반투명) -->
-            <Ellipse Margin="6">
-                <Ellipse.Fill>
-                    <RadialGradientBrush GradientOrigin="0.35,0.3" Center="0.5,0.5" RadiusX="0.75" RadiusY="0.75">
-                        <GradientStop Color="#E6FFFBEA" Offset="0.0"/>
-                        <GradientStop Color="#D98CF5D8" Offset="0.35"/>
-                        <GradientStop Color="#D97FE3C8" Offset="0.6"/>
-                        <GradientStop Color="#E6B57EDC" Offset="1.0"/>
-                    </RadialGradientBrush>
-                </Ellipse.Fill>
-                <Ellipse.Stroke>
-                    <SolidColorBrush Color="#66FFFFFF"/>
-                </Ellipse.Stroke>
-                <Ellipse.StrokeThickness>1.5</Ellipse.StrokeThickness>
-            </Ellipse>
+            <!-- 젤리 본체 (민트→보라 반투명)
+                 Ellipse 가 아니라 Path 다 — 기어다닐 때 바닥에 눌린 돔 + 뒤로 끌리는 꼬리를
+                 만들려면 도형 자체를 다시 그려야 한다(JellySkin.SetCrawlPose).
+                 평소에는 아래 EllipseGeometry 라서 예전과 똑같은 원이다.
+                 Canvas 안에 두어 좌표가 96x96 상자 그대로 쓰이게 한다. -->
+            <!-- 기어다닐 때는 원본 그림에서 잘라낸 컷을 그대로 쓴다.
+                 도형을 코드로 그려 봤지만 통통한 돔과 둥근 꼬리가 나오지 않았다.
+                 바닥선이 흔들리지 않도록 아래 정렬 + 가로 96 고정으로 둔다. -->
+            <Image x:Name="CrawlSprite" Visibility="Collapsed"
+                   Width="96" Stretch="Uniform"
+                   HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                   RenderTransformOrigin="0.5,0.5"
+                   RenderOptions.BitmapScalingMode="HighQuality">
+                <Image.RenderTransform>
+                    <ScaleTransform x:Name="CrawlFlip"/>
+                </Image.RenderTransform>
+            </Image>
+
+            <Canvas x:Name="BodyLayer" Width="96" Height="96">
+                <Path x:Name="Body">
+                    <Path.Data>
+                        <EllipseGeometry Center="48,48" RadiusX="42" RadiusY="42"/>
+                    </Path.Data>
+                    <Path.Fill>
+                        <RadialGradientBrush GradientOrigin="0.35,0.3" Center="0.5,0.5" RadiusX="0.75" RadiusY="0.75">
+                            <GradientStop Color="#E6FFFBEA" Offset="0.0"/>
+                            <GradientStop Color="#D98CF5D8" Offset="0.35"/>
+                            <GradientStop Color="#D97FE3C8" Offset="0.6"/>
+                            <GradientStop Color="#E6B57EDC" Offset="1.0"/>
+                        </RadialGradientBrush>
+                    </Path.Fill>
+                    <Path.Stroke>
+                        <SolidColorBrush Color="#66FFFFFF"/>
+                    </Path.Stroke>
+                    <Path.StrokeThickness>1.5</Path.StrokeThickness>
+                </Path>
+            </Canvas>
+
+            <!-- 얼굴(하이라이트·눈·볼터치)은 한 덩어리로 움직인다.
+                 몸이 납작해지면 눈이 몸 위로 떠 보이므로 함께 내리고 앞쪽으로 옮긴다. -->
+            <Grid x:Name="Face">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="FaceScale" CenterX="48" CenterY="48"/>
+                        <TranslateTransform x:Name="FaceShift"/>
+                    </TransformGroup>
+                </Grid.RenderTransform>
 
             <!-- 하이라이트 -->
             <Ellipse Width="22" Height="16"
@@ -62,6 +94,8 @@
                 <Ellipse Width="8" Height="6" Fill="#55FF9EC4" Margin="0,0,26,0"/>
                 <Ellipse Width="8" Height="6" Fill="#55FF9EC4"/>
             </StackPanel>
+
+            </Grid><!-- Face -->
 
         </Grid>
     </Viewbox>

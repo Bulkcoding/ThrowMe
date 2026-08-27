@@ -65,6 +65,84 @@ public partial class SlimeWindow
     /// <summary>커서 따라가기에서 커서 오른쪽 아래로 얼마나 떨어져 설 것인가(공 지름 대비).</summary>
     private const double CursorOffsetFactor = 0.55;
 
+    // ── 걸음(gait) ──────────────────────────────────────────
+    // 일정 속도로 미끄러지면 기어가는 게 아니라 떠다니는 것처럼 보인다.
+    // 사람이 한 발 내딛고 멈추듯, 모았다가 쭉 뻗고 다시 멈추기를 반복한다.
+
+    /// <summary>한 걸음의 주기(초).</summary>
+    private const double StepPeriod = 1.15;
+
+    /// <summary>주기 안에서 실제로 밀고 나가는 구간(0~1). 나머지는 모으거나 멈춰 있다.</summary>
+    private const double LungeFrom = 0.30, LungeTo = 0.68;
+
+    /// <summary>뻗는 구간이 주기에서 차지하는 평균 비율. 설정 속도를 이 값으로 나눠 최고 속도를 정한다.</summary>
+    private static readonly double LungeDuty = (LungeTo - LungeFrom) * 2.0 / Math.PI;
+
+    /// <summary>걸음 주기 안의 위치(0~1).</summary>
+    private double _stepPhase;
+
+    /// <summary>이번 프레임의 뻗기 세기(0~1). 뻗는 구간에서만 0 보다 크다.</summary>
+    private double _lunge;
+
+    /// <summary>뻗기 직전 몸을 모으는 정도(0~1).</summary>
+    private static double GatherCurve(double ph)
+    {
+        if (ph >= LungeFrom) return 0;
+        return Math.Sin(ph / LungeFrom * Math.PI * 0.5);   // 뻗기 직전에 최대
+    }
+
+    /// <summary>뻗기 세기. 구간 밖은 0, 안에서는 부드럽게 솟았다 가라앉는다.</summary>
+    private static double LungeCurve(double ph)
+    {
+        if (ph < LungeFrom || ph > LungeTo) return 0;
+        return Math.Sin((ph - LungeFrom) / (LungeTo - LungeFrom) * Math.PI);
+    }
+
+    /// <summary>걸음 주기를 진행시킨다. 한 걸음이 끝나면 true.</summary>
+    private bool AdvanceStep(double dt)
+    {
+        bool finished = false;
+        _stepPhase += dt / StepPeriod;
+        while (_stepPhase >= 1.0) { _stepPhase -= 1.0; finished = true; }
+        _lunge = LungeCurve(_stepPhase);
+        return finished;
+    }
+
+    /// <summary>
+    /// 기어다닐 때의 형태를 만든다 — 바닥에 눌린 납작한 몸 + 걸음에 맞춘 꼬물거림.
+    /// 모을 때 세로로 볼록해지고, 뻗을 때 진행 방향으로 쭉 늘어난다.
+    /// </summary>
+    private void ApplyCrawlShape(double headingRad, double lungeAmount)
+    {
+        if (_animation == null) return;
+
+        // 스킨이 실루엣을 직접 그릴 수 있으면 그쪽에 맡긴다 — 스케일 변형은 찌그러진 타원이
+        // 될 뿐이라 바닥에 눌린 돔과 꼬리가 나오지 않는다. 둘을 겹치면 이중으로 뭉개진다.
+        if (SkinHost.Content is Skins.ISkinCrawl crawl)
+        {
+            // 크기 1·각도 0 으로 못박는다. null 로 두면 속도 기반 로직이 살아나
+            // 진행 방향으로 몸 전체를 회전시켜, 평평해야 할 바닥이 비스듬해진다.
+            _animation.CrawlShape = (1.0, 1.0, 0.0);
+            crawl.SetCrawlPose(lungeAmount, Math.Cos(headingRad) >= 0 ? 1 : -1);
+            return;
+        }
+
+        double soft = 0.45 + 0.55 * Math.Clamp(_settings.Softness, 0, 1);
+        double gather = GatherCurve(_stepPhase);
+
+        // 눌린 기본형: 가로로 퍼지고 세로로 눌린다(그림의 돔 모양).
+        double x = (1.0 + 0.16 * soft) * (1.0 - 0.10 * soft * gather + 0.22 * soft * lungeAmount);
+        double y = (1.0 - 0.20 * soft) * (1.0 + 0.14 * soft * gather - 0.18 * soft * lungeAmount);
+
+        // 진행 방향으로 살짝 기운다. 위아래로 갈 때 몸이 뒤집히지 않도록 크게 돌리지 않는다.
+        double deg = headingRad * 180.0 / Math.PI;
+        while (deg > 90) deg -= 180;
+        while (deg < -90) deg += 180;
+        double lean = Math.Clamp(deg, -12, 12) * (0.35 + 0.65 * lungeAmount);
+
+        _animation.CrawlShape = (x, y, lean);
+    }
+
     private bool AutoMoveOn => _settings.AutoMove != AutoMoveMode.Off;
 
     /// <summary>자동 이동이 실제로 돌아야 하는 상황인가.</summary>
@@ -167,6 +245,8 @@ public partial class SlimeWindow
         {
             _physics.Propulsion = Vector2.Zero;
             _physics.AutoMoving = false;
+            if (_animation != null) _animation.CrawlShape = null;      // 평소 형태로 되돌린다
+            (SkinHost.Content as Skins.ISkinCrawl)?.ClearCrawlPose();  // 스킨 도형도 원래대로
             return;
         }
         _physics.AutoMoving = true;
@@ -176,9 +256,9 @@ public partial class SlimeWindow
 
         switch (_settings.AutoMove)
         {
-            case AutoMoveMode.CursorFollow: TickCursorFollow(speed); break;
-            case AutoMoveMode.Taskbar: TickTaskbarWalk(speed); break;
-            default: TickRoam(speed); break;
+            case AutoMoveMode.CursorFollow: TickCursorFollow(dt, speed); break;
+            case AutoMoveMode.Taskbar: TickTaskbarWalk(dt, speed); break;
+            default: TickRoam(dt, speed); break;
         }
     }
 
@@ -196,10 +276,12 @@ public partial class SlimeWindow
     }
 
     /// <summary>화면을 느릿느릿 기어다닌다.</summary>
-    private void TickRoam(double speed)
+    private void TickRoam(double dt, double speed)
     {
+        // 방향은 걸음과 걸음 사이(멈춰 있을 때)에만 튼다 — 뻗는 도중에 꺾이면 미끄러져 보인다.
+        bool stepDone = AdvanceStep(dt);
         double now = Now;
-        if (now >= _autoTurnAt)
+        if (stepDone && now >= _autoTurnAt)
         {
             _autoTurnAt = now + TurnMinSec + _autoRng.NextDouble() * (TurnMaxSec - TurnMinSec);
             double turn = (_autoRng.NextDouble() * 2 - 1) * TurnMaxDeg * Math.PI / 180.0;
@@ -230,14 +312,18 @@ public partial class SlimeWindow
             }
         }
 
-        _physics.Propulsion = SteerTo(dir * speed);
+        // 뻗는 구간에만 민다. 나머지 구간에서는 목표 속도가 0 이라 제자리에 멎는다.
+        // 평균이 설정 속도가 되도록 최고 속도를 duty 로 나눠 올린다.
+        _physics.Propulsion = SteerTo(dir * (speed / LungeDuty * _lunge));
+        ApplyCrawlShape(_autoHeading, _lunge);
     }
 
     /// <summary>중력으로 화면 아래(작업표시줄 위)에 붙어 좌우로만 걷는다.</summary>
-    private void TickTaskbarWalk(double speed)
+    private void TickTaskbarWalk(double dt, double speed)
     {
+        bool stepDone = AdvanceStep(dt);
         double now = Now;
-        if (now >= _autoTurnAt)
+        if (stepDone && now >= _autoTurnAt)
         {
             _autoTurnAt = now + TurnMinSec * 2 + _autoRng.NextDouble() * (TurnMaxSec * 2);
             if (_autoRng.NextDouble() < 0.35) _autoHeading = _autoHeading >= 0 ? Math.PI : 0; // 가끔 방향 전환
@@ -255,15 +341,27 @@ public partial class SlimeWindow
             else if (cx > r.Right - margin) { sign = -1; _autoHeading = Math.PI; }
         }
 
-        // 세로 추진은 주지 않는다 — 중력이 바닥에 붙여 주고, 우리는 좌우로만 민다.
         // 세로는 건드리지 않는다 — 중력이 바닥에 붙여 주고, 우리는 좌우 속도만 맞춘다.
-        _physics.Propulsion = new Vector2(SteerTo(new Vector2(sign * speed, _physics.Velocity.Y)).X, 0);
+        // 뻗는 구간에만 밀어서, 한 발 내딛고 멈추기를 반복한다.
+        double wantX = sign * speed / LungeDuty * _lunge;
+        _physics.Propulsion = new Vector2(SteerTo(new Vector2(wantX, _physics.Velocity.Y)).X, 0);
+        ApplyCrawlShape(sign > 0 ? 0 : Math.PI, _lunge);
     }
 
     /// <summary>커서의 오른쪽 아래를 목표로 천천히 따라간다.</summary>
-    private void TickCursorFollow(double speed)
+    private void TickCursorFollow(double dt, double speed)
     {
-        if (!GetCursorPos(out var p)) { _physics.Propulsion = Vector2.Zero; return; }
+        // 따라다닐 때는 걸음으로 뚝뚝 끊지 않는다 — 커서를 놓치면 안 되므로 부드럽게 쫓는다.
+        // 대신 눌린 몸과 진행 방향 기울기는 그대로 준다.
+        _stepPhase = 0;
+        _lunge = 0;
+
+        if (!GetCursorPos(out var p))
+        {
+            _physics.Propulsion = Vector2.Zero;
+            ApplyCrawlShape(0, 0);
+            return;
+        }
 
         double s = _settings.SlimeSize;
         int cur = Math.Max(16, GetSystemMetrics(SM_CXCURSOR));
@@ -275,10 +373,19 @@ public partial class SlimeWindow
         Vector2 center = _physics.Position + new Vector2(s / 2, s / 2);
         Vector2 delta = target - center;
         double dist = delta.Length;
-        if (dist < 2.0) { _physics.Propulsion = Vector2.Zero; return; }
+        if (dist < 2.0)
+        {
+            _physics.Propulsion = Vector2.Zero;
+            ApplyCrawlShape(0, 0);
+            return;
+        }
 
         // 멀수록 빠르게 쫓는다(상한 있음) → 커서를 홱 옮겨도 따라붙고, 가까우면 살살 다가간다.
         double boost = Math.Min(6.0, dist / Math.Max(1.0, s * 0.5));
         _physics.Propulsion = SteerTo(delta.Normalized() * (speed * (1.0 + boost)));
+
+        // 쫓는 세기에 맞춰 늘어난다 — 빨리 갈수록 진행 방향으로 길어진다.
+        double eff = Math.Min(1.0, _physics.Velocity.Length / Math.Max(1.0, speed * 4));
+        ApplyCrawlShape(Math.Atan2(delta.Y, delta.X), eff);
     }
 }

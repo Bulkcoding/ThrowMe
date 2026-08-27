@@ -30,6 +30,15 @@ public sealed class SlimeAnimationController
     /// <summary>true 면 찌그러짐/변형 없이 형태를 고정한다(당구공 등 단단한 스킨). 스핀 회전은 유지.</summary>
     public bool Rigid { get; set; }
 
+    /// <summary>
+    /// 자동 이동(꼬물꼬물) 중 형태를 직접 지정한다. null 이면 평소처럼 속도로 계산한다.
+    ///
+    /// 속도 기반 stretch 는 <see cref="AppSettings.ImpactReferenceSpeed"/>(7000px/s) 대비로 계산해서,
+    /// 15px/s 로 기어갈 때는 변형이 사실상 0 이 된다 — 모양 그대로 미끄러져 '떠다니는' 것처럼 보였다.
+    /// 그래서 기어다닐 때는 걸음 주기가 직접 형태를 만든다.
+    /// </summary>
+    public (double X, double Y, double AngleDeg)? CrawlShape { get; set; }
+
     public SlimeAnimationController(ScaleTransform scale, RotateTransform rotate, AppSettings settings)
     {
         _scale = scale;
@@ -61,7 +70,14 @@ public sealed class SlimeAnimationController
 
         double speed = velocity.Length;
 
-        if (speed > 1.0)
+        if (CrawlShape is { } c)
+        {
+            // 걸음이 형태를 만든다. 속도는 보지 않는다.
+            _tgtX = c.X;
+            _tgtY = c.Y;
+            _tgtAngle = c.AngleDeg;
+        }
+        else if (speed > 1.0)
         {
             // 이동 방향으로 늘어나고 수직으로 납작해진다.
             double t = Math.Clamp(speed / _settings.ImpactReferenceSpeed, 0, 1);
