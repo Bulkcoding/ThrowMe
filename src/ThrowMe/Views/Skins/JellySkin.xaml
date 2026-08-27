@@ -6,19 +6,13 @@
     <Viewbox Stretch="Uniform">
         <Grid Width="96" Height="96">
 
-            <!-- 젤리 본체 (민트→보라 반투명)
-                 Ellipse 가 아니라 Path 다 — 기어다닐 때 바닥에 눌린 돔 + 뒤로 끌리는 꼬리를
-                 만들려면 도형 자체를 다시 그려야 한다(JellySkin.SetCrawlPose).
-                 평소에는 아래 EllipseGeometry 라서 예전과 똑같은 원이다.
-                 Canvas 안에 두어 좌표가 96x96 상자 그대로 쓰이게 한다. -->
-            <!-- 기어다닐 때는 원본 그림에서 잘라낸 컷을 그대로 쓴다.
-                 도형을 코드로 그려 봤지만 통통한 돔과 둥근 꼬리가 나오지 않았다.
-                 바닥선이 흔들리지 않도록 아래 정렬 + 가로 96 고정으로 둔다. -->
-            <!-- 폭을 84 로 둔다(96 상자에 좌우 6px 여백). 96 으로 꽉 채우면 뻗은 자세의
-                 꼬리 끝이 상자 경계에 정확히 닿아 잘려 보인다 — 예전 벡터 몸통도 Margin 6 이었다.
-                 아래 여백 4 는 바닥에 붙어도 끝이 깎이지 않게 하는 여유다. -->
+            <!-- 기어다닐 때 쓰는 컷(원본 시트에서 잘라낸 그림). 방향별로 다른 컷을 쓰므로
+                 좌우로 뒤집지 않는다.
+                 폭 80 = 96 상자에 좌우 8px 여백. 꽉 채우면 뻗은 자세의 꼬리 끝이 경계에 닿아
+                 잘려 보인다(예전 벡터 몸통도 Margin 6, 지름 84 였다).
+                 바닥선이 흔들리지 않도록 아래로 정렬한다. -->
             <Image x:Name="CrawlSprite" Visibility="Collapsed"
-                   Width="84" Stretch="Uniform" Margin="0,0,0,4"
+                   Width="80" Stretch="Uniform" Margin="0,0,0,6"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
                    RenderOptions.BitmapScalingMode="HighQuality"/>
 

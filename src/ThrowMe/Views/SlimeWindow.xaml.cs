@@ -704,6 +704,10 @@ public partial class SlimeWindow : Window
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // 자동 이동 중에는 마우스로 잡거나 던질 수 없다. 스스로 걸어 다니는 중에 끌면
+        // 스핀이 충전돼 놓는 순간 팽이처럼 돌아 버린다. 멈추려면 잡기 단축키를 쓴다.
+        if (AutoMoveOn) return;
+
         var c = CursorPhysical();
         LogClickReachedWindow(c);
         if (IsCueMode)
@@ -715,6 +719,7 @@ public partial class SlimeWindow : Window
     }
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
+        if (AutoMoveOn) return;
         var c = CursorPhysical();
         if (_spinDragging) SetSpinFromCursor(c);
         else if (_aiming) UpdateAim(c);
@@ -722,6 +727,7 @@ public partial class SlimeWindow : Window
     }
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (AutoMoveOn) return;
         var c = CursorPhysical();
         if (_spinDragging) { _spinDragging = false; try { ReleaseMouseCapture(); } catch { } }
         else if (_aiming) ReleaseAim(c);
