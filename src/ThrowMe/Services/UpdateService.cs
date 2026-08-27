@@ -236,6 +236,14 @@ public static class UpdateService
             // (pending_* 는 apply.cmd 가 지우므로, 살아남을 이름으로 옮겨 둔다.)
             PromoteNotes(pv);
             string script = Path.Combine(StageDir, "apply.cmd");
+
+            // 스크립트 본문에는 경로를 넣지 않는다 — 전부 환경 변수로 넘긴다.
+            //
+            // cmd.exe 는 .cmd 파일을 UTF-8 이 아니라 시스템 코드페이지로 읽는다(한국어 Windows 는 949).
+            // 그래서 한글이 든 경로를 본문에 그대로 쓰면 깨진 경로가 되어 copy 가 실패한다.
+            // 실측: 바탕화면의 한글 폴더에 둔 exe 에서 errorlevel 1 로 실패하고, 폴더 자체는
+            // 쓰기 가능했다. 이 PC 는 켤 때마다 받고 → 실패 → 재시작을 반복했다.
+            // 환경 변수는 유니코드로 전달되므로, 본문을 ASCII 로만 유지하면 어떤 경로에서도 안전하다.
             File.WriteAllText(script,
                 "@echo off\r\n" +
                 ":wait\r\n" +
@@ -243,25 +251,30 @@ public static class UpdateService
                 // copy 결과를 반드시 본다. 예전에는 결과와 무관하게 받아 둔 파일을 지워 버려서,
                 // 교체가 실패해도 옛 버전이 그대로 다시 뜨고 다음 실행에 160MB 를 또 받았다.
                 // 성공했을 때만 지우고, 실패하면 그대로 남겨 결과 파일에 기록한다.
-                $"copy /y \"{PendingExe}\" \"{target}\" >nul 2>&1\r\n" +
+                "copy /y \"%TM_SRC%\" \"%TM_DST%\" >nul 2>&1\r\n" +
                 "set RC=%errorlevel%\r\n" +
-                $"if not \"%RC%\"==\"0\" goto failed\r\n" +
-                $">\"{ApplyResult}\" echo ok\r\n" +
-                $"del /q \"{PendingExe}\" >nul 2>&1\r\n" +
-                $"del /q \"{PendingVer}\" >nul 2>&1\r\n" +
+                "if not \"%RC%\"==\"0\" goto failed\r\n" +
+                ">\"%TM_RESULT%\" echo ok\r\n" +
+                "del /q \"%TM_SRC%\" >nul 2>&1\r\n" +
+                "del /q \"%TM_VER%\" >nul 2>&1\r\n" +
                 "goto run\r\n" +
                 ":failed\r\n" +
-                $">\"{ApplyResult}\" echo fail %RC%\r\n" +
+                ">\"%TM_RESULT%\" echo fail %RC%\r\n" +
                 ":run\r\n" +
-                $"start \"\" \"{target}\"\r\n" +
+                "start \"\" \"%TM_DST%\"\r\n" +
                 "del /q \"%~f0\" >nul 2>&1\r\n");
 
-            Process.Start(new ProcessStartInfo("cmd.exe", $"/c \"{script}\"")
+            var psi = new ProcessStartInfo("cmd.exe", $"/c \"{script}\"")
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden,
-            });
+            };
+            psi.Environment["TM_SRC"] = PendingExe;
+            psi.Environment["TM_DST"] = target;
+            psi.Environment["TM_VER"] = PendingVer;
+            psi.Environment["TM_RESULT"] = ApplyResult;
+            Process.Start(psi);
             return true;
         }
         catch { return false; }
