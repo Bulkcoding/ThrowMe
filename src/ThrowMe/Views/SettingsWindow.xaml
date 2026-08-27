@@ -242,6 +242,86 @@
                                         </StackPanel>
                                     </Border>
 
+                                    <!-- ── 자동 이동 ── -->
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                                <TextBlock Style="{StaticResource CardIcon}" Text="&#xE81D;"/>
+                                                <TextBlock Style="{StaticResource CardTitle}" Text="자동 이동"/>
+                                            </StackPanel>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="움직임" Style="{StaticResource RowLabel}"/>
+                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="무한 튕기기와 달리 느리게 끊임없이 움직입니다.&#10;· 기어다니기 — 화면을 느릿느릿 돌아다닙니다.&#10;· 작업표시줄 걷기 — 화면 아래에 붙어 좌우로 걷습니다.&#10;· 커서 따라가기 — 마우스 오른쪽 아래를 천천히 따라옵니다.&#10;뒤 두 가지는 작업을 가리지 않도록 슬라임 클릭이 막힙니다."/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="스스로 움직이는 방식." Style="{StaticResource RowDesc}"/>
+                                                </StackPanel>
+                                                <ComboBox x:Name="AutoMoveBox" Grid.Column="1" VerticalAlignment="Center"
+                                                          Style="{StaticResource DarkCombo}"
+                                                          SelectionChanged="OnAutoMoveChanged">
+                                                    <ComboBoxItem Content="끔"/>
+                                                    <ComboBoxItem Content="기어다니기"/>
+                                                    <ComboBoxItem Content="작업표시줄 걷기"/>
+                                                    <ComboBoxItem Content="커서 따라가기"/>
+                                                </ComboBox>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="이동 속도" Style="{StaticResource RowLabel}"/>
+                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="자동으로 움직일 때의 속도입니다. 낮을수록 꼬물꼬물 기어갑니다."/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="초당 몇 픽셀씩 갈지." Style="{StaticResource RowDesc}"/>
+                                                </StackPanel>
+                                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
+                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}"
+                                                            Minimum="5" Maximum="120" Value="{Binding AutoMoveSpeed}"/>
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding AutoMoveSpeed, StringFormat={}{0:0}}"/>
+                                                </Grid>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="돌아다닐 모니터" Style="{StaticResource RowLabel}"/>
+                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="자동 이동을 한 모니터 안에만 가둡니다.&#10;던지기에는 적용되지 않으므로, 손으로는 어느 모니터로든 보낼 수 있습니다."/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="자동 이동에만 적용됩니다." Style="{StaticResource RowDesc}"/>
+                                                </StackPanel>
+                                                <ComboBox x:Name="AutoMoveMonitorBox" Grid.Column="1" VerticalAlignment="Center"
+                                                          Style="{StaticResource DarkCombo}"
+                                                          SelectionChanged="OnAutoMoveMonitorChanged"/>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="따라다닐 때 크기" Style="{StaticResource RowLabel}"/>
+                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="커서 따라가기일 때만 쓰는 지름입니다. 평소 크기와 따로 저장됩니다."/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="커서 따라가기 전용." Style="{StaticResource RowDesc}"/>
+                                                </StackPanel>
+                                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
+                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}"
+                                                            Minimum="48" Maximum="480" Value="{Binding CursorFollowSize}"/>
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding CursorFollowSize, StringFormat={}{0:0}px}"/>
+                                                </Grid>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
@@ -635,6 +715,23 @@
                                                    Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
                                         <Button x:Name="HideKeyBtn" Style="{StaticResource GhostButton}"
                                                 MinWidth="104" Click="OnRebindHideKey"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="설정 열기" Style="{StaticResource Section}"/>
+                                <Grid Margin="0,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="설정 창 열기 (기본 Space + Tab)" Style="{StaticResource RowLabel}"/>
+                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="앞 칸의 키를 누르고 있는 동안 뒤 칸의 키를 누르면 설정이 열립니다.&#10;여기만 두 칸 모두 아무 키나 넣을 수 있습니다(수정자가 아니어도 됩니다).&#10;자동 이동 중에는 슬라임을 클릭할 수 없으므로 이 단축키가 설정으로 가는 길입니다.&#10;순서대로 치는 평범한 타이핑은 가로채지 않습니다."/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button x:Name="OpenSetHoldBtn" Style="{StaticResource GhostButton}"
+                                                MinWidth="104" Click="OnRebindOpenSetHold"/>
+                                        <TextBlock Text="+" VerticalAlignment="Center" Margin="8,0"
+                                                   Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                                        <Button x:Name="OpenSetKeyBtn" Style="{StaticResource GhostButton}"
+                                                MinWidth="104" Click="OnRebindOpenSetKey"/>
                                     </StackPanel>
                                 </Grid>
 

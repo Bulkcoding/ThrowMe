@@ -93,6 +93,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         set
         {
             if (_infiniteBounce == value) return;
+            if (value && AutoMove != AutoMoveMode.Off) AutoMove = AutoMoveMode.Off; // 둘은 배타
             if (value)
             {
                 _slowdownBeforeInfinite = SlowdownScale;
@@ -319,8 +320,10 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// 공만 실제 픽셀 고정이면 혼자 작아 보였다. 배율을 곱하면 어느 화면에서도 같은 크기로 보인다.
     /// 물리 충돌 상자도 이 값을 써야 그림과 어긋나지 않는다.
     /// </summary>
+    /// 커서 따라가기 중에는 <see cref="CursorFollowSize"/> 를 쓴다 — 이 모드만 크기가 크게 다르다.
     [JsonIgnore]   // 계산값이라 저장하지 않는다. 빼면 SlimeSizeBase 와 저장 키가 충돌한다.
-    public double SlimeSize => _slimeSize * _displayScale;
+    public double SlimeSize =>
+        (_autoMove == AutoMoveMode.CursorFollow ? _cursorFollowSize : _slimeSize) * _displayScale;
 
     /// <summary>말랑함(Slime Softness). Squash/Stretch 강도 스케일. 0~1</summary>
     private double _softness = 0.5;
@@ -418,6 +421,58 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// </summary>
     private int _windHotkeyVk = 0x20;
     public int WindHotkeyVk { get => _windHotkeyVk; set => Set(ref _windHotkeyVk, value); }
+
+    // ── 설정 열기 단축키 ────────────────────────────────────
+    /// <summary>
+    /// 설정 창을 여는 조합키. 잡기·숨기기와 달리 <b>두 칸 모두 아무 키나</b> 넣을 수 있어서
+    /// Windows 전역 단축키 API(수정자 + 키)로는 등록할 수 없다. 저수준 키보드 훅으로 직접 본다
+    /// — 앞 키를 <b>누르고 있는 동안</b> 뒤 키를 누르면 발동한다(순서대로 치는 타이핑은 영향 없음).
+    ///
+    /// 기본값 Space(0x20) + Tab(0x09). 둘 중 하나라도 0이면 사용하지 않는다.
+    /// </summary>
+    private int _openSettingsHoldVk = 0x20;
+    public int OpenSettingsHoldVk { get => _openSettingsHoldVk; set => Set(ref _openSettingsHoldVk, value); }
+
+    private int _openSettingsVk = 0x09;
+    public int OpenSettingsVk { get => _openSettingsVk; set => Set(ref _openSettingsVk, value); }
+
+    // ── 자동 이동 ───────────────────────────────────────────
+    /// <summary>슬라임이 스스로 움직이는 방식. <see cref="InfiniteBounce"/> 와는 배타적이다.</summary>
+    private AutoMoveMode _autoMove = AutoMoveMode.Off;
+    public AutoMoveMode AutoMove
+    {
+        get => _autoMove;
+        set
+        {
+            if (value != AutoMoveMode.Off && InfiniteBounce) InfiniteBounce = false;
+            if (Set(ref _autoMove, value)) Raise(nameof(SlimeSize)); // 커서 따라가기는 크기가 다르다
+        }
+    }
+
+    /// <summary>자동 이동 속도(px/s). 마찰과 함께 추진력으로 환산된다.</summary>
+    private double _autoMoveSpeed = 18.0;
+    public double AutoMoveSpeed { get => _autoMoveSpeed; set => Set(ref _autoMoveSpeed, value); }
+
+    public const double MinAutoMoveSpeed = 5.0, MaxAutoMoveSpeed = 120.0;
+
+    /// <summary>
+    /// 자동 이동을 가둘 모니터. 빈 문자열이면 전체 화면을 돌아다닌다.
+    /// 값은 <c>"1920x1080@0,0"</c> 형태 — 장치 이름을 쓰지 않는 이유는 모니터 열거 코드를
+    /// 건드리지 않기 위해서다. 해당 모니터가 없어지면 자동으로 전체로 되돌아간다.
+    /// <b>던지기에는 적용하지 않는다</b> — 손으로는 어느 모니터로든 보낼 수 있다.
+    /// </summary>
+    private string _autoMoveMonitor = "";
+    public string AutoMoveMonitor { get => _autoMoveMonitor; set => Set(ref _autoMoveMonitor, value ?? ""); }
+
+    /// <summary>커서 따라가기일 때 쓰는 지름(px). 평소 크기와 따로 둔다.</summary>
+    private double _cursorFollowSize = 400.0;
+    public double CursorFollowSize
+    {
+        get => _cursorFollowSize;
+        set { if (Set(ref _cursorFollowSize, value)) Raise(nameof(SlimeSize)); }
+    }
+
+    public const double MinCursorFollowSize = 48.0, MaxCursorFollowSize = 480.0;
 
     /// <summary>효과음 사용(Phase 4).</summary>
     private bool _soundEnabled = true;

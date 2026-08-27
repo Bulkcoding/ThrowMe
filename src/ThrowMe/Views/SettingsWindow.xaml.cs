@@ -55,6 +55,7 @@ public partial class SettingsWindow : Window
         UpdateAimKeyText();
         UpdateWindKeyText();
         UpdateInfiniteBounceLocks();
+        BuildAutoMoveSection();
         UpdateBilliardSection();
         UpdateCustomImageSection();
         _settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -578,11 +579,18 @@ public partial class SettingsWindow : Window
     /// 수정자 없이 단독 키를 허용하면 평소 타이핑과 클릭까지 전역으로 가로챈다 —
     /// 실제로 맨 좌클릭이 잡기로 걸려 공이 계속 끌려다닌 적이 있다.
     /// </summary>
-    private enum HotkeyTarget { None, CatchMod, CatchKey, HideMod, HideKey }
+    private enum HotkeyTarget { None, CatchMod, CatchKey, HideMod, HideKey, OpenSetHold, OpenSetKey }
 
     private HotkeyTarget _capturing = HotkeyTarget.None;
     private int _pMod, _pVk, _pMouse;            // 잡기 대기값
     private int _hMod, _hVk, _hMouse;            // 숨기기 대기값
+    private int _oHold, _oVk;                    // 설정 열기 대기값(두 칸 모두 아무 키나)
+
+    private void OnRebindOpenSetHold(object sender, RoutedEventArgs e)
+        => BeginCapture(HotkeyTarget.OpenSetHold);
+
+    private void OnRebindOpenSetKey(object sender, RoutedEventArgs e)
+        => BeginCapture(HotkeyTarget.OpenSetKey);
 
     private void OnRebindCatchMod(object sender, RoutedEventArgs e)
         => BeginCapture(HotkeyTarget.CatchMod);
@@ -609,6 +617,9 @@ public partial class SettingsWindow : Window
             case HotkeyTarget.CatchKey: _pVk = _pMouse = 0; CatchKeyBtn.Content = prompt; break;
             case HotkeyTarget.HideMod: _hMod = 0; HideModBtn.Content = prompt; break;
             case HotkeyTarget.HideKey: _hVk = _hMouse = 0; HideKeyBtn.Content = prompt; break;
+            // 설정 열기는 두 칸 모두 아무 키나 받는다(수정자여도 되고 아니어도 된다).
+            case HotkeyTarget.OpenSetHold: _oHold = 0; OpenSetHoldBtn.Content = "키 입력…"; break;
+            case HotkeyTarget.OpenSetKey: _oVk = 0; OpenSetKeyBtn.Content = "키 입력…"; break;
         }
         SaveBtn.IsEnabled = false;
     }
@@ -701,6 +712,17 @@ public partial class SettingsWindow : Window
         bool isModifierKey = key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
             or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
 
+        if (_capturing is HotkeyTarget.OpenSetHold or HotkeyTarget.OpenSetKey)
+        {
+            // 여기만 키보드의 모든 키를 받는다 — 수정자 단독(Ctrl 등)도 그대로 인정한다.
+            int vkAny = KeyInterop.VirtualKeyFromKey(key);
+            if (vkAny == 0) return;
+            if (_capturing == HotkeyTarget.OpenSetHold) _oHold = vkAny; else _oVk = vkAny;
+            EndCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (_capturing is HotkeyTarget.CatchMod or HotkeyTarget.HideMod)
         {
             // 수정자 칸: 수정자만 받는다. 두 개를 함께 누르면(Ctrl+Shift) 둘 다 들어간다.
@@ -747,7 +769,69 @@ public partial class SettingsWindow : Window
         CatchKeyBtn.Content = KeyText(_pVk, _pMouse);
         HideModBtn.Content = ModText(_hMod);
         HideKeyBtn.Content = KeyText(_hVk, _hMouse);
+        OpenSetHoldBtn.Content = _oHold != 0 ? HotkeyText.KeyName(_oHold) : "(키 필요)";
+        OpenSetKeyBtn.Content = _oVk != 0 ? HotkeyText.KeyName(_oVk) : "(키 필요)";
     }
+
+    // ── 자동 이동 ───────────────────────────────────────────
+    /// <summary>콤보 상자를 채우는 동안 SelectionChanged 로 설정이 덮어써지지 않게 막는다.</summary>
+    private bool _fillingAutoMove;
+
+    /// <summary>모니터 목록과 현재 선택을 채운다.</summary>
+    private void BuildAutoMoveSection()
+    {
+        _fillingAutoMove = true;
+        try
+        {
+            AutoMoveBox.SelectedIndex = (int)_settings.AutoMove;
+
+            AutoMoveMonitorBox.Items.Clear();
+            AutoMoveMonitorBox.Items.Add(new ComboBoxItem { Content = "전체 화면", Tag = "" });
+
+            var bounds = _slime.MonitorBoundsForSettings;
+            for (int i = 0; i < bounds.Count; i++)
+            {
+                var b = bounds[i];
+                string key = SlimeWindow.MonitorKey(b);
+                AutoMoveMonitorBox.Items.Add(new ComboBoxItem
+                {
+                    Content = $"모니터 {i + 1} — {(int)b.Width}x{(int)b.Height}",
+                    Tag = key,
+                });
+            }
+
+            int sel = 0;
+            for (int i = 0; i < AutoMoveMonitorBox.Items.Count; i++)
+                if (((ComboBoxItem)AutoMoveMonitorBox.Items[i]).Tag as string == _settings.AutoMoveMonitor)
+                { sel = i; break; }
+            AutoMoveMonitorBox.SelectedIndex = sel;
+        }
+        finally { _fillingAutoMove = false; }
+    }
+
+    private void OnAutoMoveChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_fillingAutoMove) return;
+        int i = AutoMoveBox.SelectedIndex;
+        if (i >= 0) _settings.AutoMove = (AutoMoveMode)i;
+    }
+
+    private void OnAutoMoveMonitorChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_fillingAutoMove) return;
+        if (AutoMoveMonitorBox.SelectedItem is ComboBoxItem it)
+            _settings.AutoMoveMonitor = it.Tag as string ?? "";
+    }
+
+    /// <summary>수정자 가상키 → 수정자 비트. 수정자가 아니면 0.</summary>
+    private static int ModBitOf(int vk) => vk switch
+    {
+        0x11 or 0xA2 or 0xA3 => 2, // Ctrl
+        0x10 or 0xA0 or 0xA1 => 4, // Shift
+        0x12 or 0xA4 or 0xA5 => 1, // Alt
+        0x5B or 0x5C => 8,         // Win
+        _ => 0,
+    };
 
     /// <summary>조합키로 성립하는가 — 수정자와 키(또는 클릭)가 모두 있어야 한다.</summary>
     private static bool IsValidCombo(int mod, int vk, int mouse) => mod != 0 && (vk != 0 || mouse != 0);
@@ -763,12 +847,40 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        if (_oHold == 0 || _oVk == 0)
+        {
+            MessageBox.Show(this,
+                "설정 열기 단축키는 두 칸을 모두 채워야 합니다.\n\n" +
+                "앞 칸의 키를 누르고 있는 동안 뒤 칸의 키를 누르면 설정이 열립니다.",
+                "단축키", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (_oHold == _oVk)
+        {
+            MessageBox.Show(this,
+                "설정 열기 단축키의 두 칸에 같은 키를 넣을 수 없습니다.",
+                "단축키", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // 잡기·숨기기와 겹치는지 본다. 앞 칸이 수정자면 같은 조합이 되어 서로 잡아먹는다.
+        int oMod = ModBitOf(_oHold);
+        if (oMod != 0 && ((oMod == _pMod && _oVk == _pVk) || (oMod == _hMod && _oVk == _hVk)))
+        {
+            MessageBox.Show(this,
+                "설정 열기 단축키가 잡기 또는 숨기기와 같습니다.\n\n같은 조합은 쓸 수 없습니다.",
+                "단축키", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         _settings.CatchHotkeyMod = _pMod;
         _settings.CatchHotkeyVk = _pVk;
         _settings.CatchHotkeyMouse = _pMouse;
         _settings.HideHotkeyMod = _hMod;
         _settings.HideHotkeyVk = _hVk;
         _settings.HideHotkeyMouse = _hMouse;
+        _settings.OpenSettingsHoldVk = _oHold;
+        _settings.OpenSettingsVk = _oVk;
         SaveBtn.IsEnabled = false;
     }
 
@@ -777,6 +889,7 @@ public partial class SettingsWindow : Window
         // 대기값을 현재 설정으로 초기화 — 한쪽만 바꿔 저장해도 다른 쪽이 지워지지 않도록.
         _pMod = _settings.CatchHotkeyMod; _pVk = _settings.CatchHotkeyVk; _pMouse = _settings.CatchHotkeyMouse;
         _hMod = _settings.HideHotkeyMod; _hVk = _settings.HideHotkeyVk; _hMouse = _settings.HideHotkeyMouse;
+        _oHold = _settings.OpenSettingsHoldVk; _oVk = _settings.OpenSettingsVk;
         RefreshHotkeyBoxes();
     }
 

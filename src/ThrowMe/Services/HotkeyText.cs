@@ -39,6 +39,16 @@ public static class HotkeyText
         return $"{m} + {k}";
     }
 
+    /// <summary>
+    /// 수정자 없이 아무 키 두 개를 묶은 표기("Space + Tab"). 설정 열기 단축키용.
+    /// 앞 키를 누르고 있는 동안 뒤 키를 누르는 조합이다.
+    /// </summary>
+    public static string Chord(int holdVk, int vk)
+    {
+        if (holdVk == 0 || vk == 0) return "(없음)";
+        return $"{KeyName(holdVk)} + {KeyName(vk)}";
+    }
+
     /// <summary>Key.Oem3 처럼 알아보기 어려운 이름을 실제 새겨진 글자로 바꿔 보여준다.</summary>
     public static string KeyName(int vk) => vk switch
     {

@@ -71,6 +71,27 @@ public sealed class SlimePhysicsEngine
     /// 젤리 테마에서만 켠다(SlimeWindow.UpdateSkinBehavior 에서 주입).</summary>
     public double RandomBounceSpreadDeg { get; set; } = 0.0;
 
+    /// <summary>
+    /// 자동 이동용 추진 가속도(px/s^2). 0 이 아니면 슬라임이 스스로 그 방향으로 밀린다.
+    ///
+    /// 속도를 직접 넣지 않고 가속도로 주는 이유는, 마찰이 있으면 속도가 저절로
+    /// <c>추진력 ÷ 마찰</c> 에서 멎기 때문이다 — 목표 속도를 그 식으로 역산해 넣으면
+    /// 프레임 간격과 무관하게 일정한 속도로 기어간다.
+    ///
+    /// 추진 중에는 정지 임계로 속도를 죽이지 않는다. 임계가 20px/s 라
+    /// 진짜 '꼬물꼬물' 속도는 그대로 0 이 되어 버리기 때문이다.
+    /// </summary>
+    public Vector2 Propulsion { get; set; } = Vector2.Zero;
+
+    /// <summary>
+    /// 자동 이동 중인가. 켜져 있으면 정지 임계로 속도를 죽이지도, 수면에 들지도 않는다.
+    /// <see cref="Propulsion"/> 이 0 인지로 판단하지 않는 이유는, 속도 제어기가 목표 속도에
+    /// 도달하면 추진력이 순간적으로 0 이 되기 때문이다 — 그때 멈춰 버리면 딸꾹질처럼 끊긴다.
+    /// </summary>
+    public bool AutoMoving { get; set; }
+
+    private bool Propelled => Propulsion.LengthSquared > 1e-9;
+
     private double EffRestitution => RestitutionOverride ?? _settings.Restitution;
     // 사용자의 감속 배율은 여기 한 곳에서 곱한다 — 테마·골대·볼링의 마찰 오버라이드에도 함께 걸린다.
     private double EffFriction => (FrictionOverride ?? _settings.Friction) * _settings.SlowdownScale;
@@ -125,6 +146,7 @@ public sealed class SlimePhysicsEngine
         // 이동도 회전도 표면스핀도 없을 때만 완전 정지로 간주.
         // 중력이 있으면 "바닥에 닿아 있을 때"만 정지(공중에 멈춘 공은 낙하해야 함).
         if (dt <= 0 || (IsAtRest
+                        && !AutoMoving         // 자동 이동 중이면 아직 밀 힘이 남아 있다
                         && Math.Abs(AngularVelocity) < _settings.SpinStopThreshold
                         && Math.Abs(SurfaceSpin) < _settings.SurfaceSpinStopThreshold
                         && (!gravity || IsGrounded())))
@@ -137,6 +159,10 @@ public sealed class SlimePhysicsEngine
         // 0) 중력 가속(농구공)
         if (gravity)
             Velocity = Velocity.WithY(Velocity.Y + GravityY * dt);
+
+        // 0.5) 자동 이동 추진. 마찰보다 먼저 더해야 이번 프레임부터 마찰과 균형을 이룬다.
+        if (Propelled)
+            Velocity += Propulsion * dt;
 
         // 1) 마찰(프레임 독립 지수 감쇠)
         Velocity *= Math.Exp(-EffFriction * dt);
@@ -192,6 +218,8 @@ public sealed class SlimePhysicsEngine
                         hitPos = Position;                        // 벽에 닿은 그 지점
                     }
                     Velocity = Velocity.WithX(-Velocity.X * EffRestitution);
+                    // 추진 방향도 같이 꺾는다. 안 그러면 자동 이동이 벽에 코를 박고 계속 민다.
+                    if (Propelled) Propulsion = Propulsion.WithX(-Propulsion.X);
                     // 스핀이 벽을 물어 접선(세로) 방향으로 튀고, 스핀은 소모된다.
                     if (Math.Abs(AngularVelocity) > 1e-3)
                     {
@@ -230,6 +258,7 @@ public sealed class SlimePhysicsEngine
                         hitPos = Position;                        // 벽에 닿은 그 지점
                     }
                     Velocity = Velocity.WithY(-Velocity.Y * EffRestitution);
+                    if (Propelled) Propulsion = Propulsion.WithY(-Propulsion.Y);
                     // 스핀이 벽을 물어 접선(가로) 방향으로 튀고, 스핀은 소모된다.
                     //
                     // 무한 튕기기에서는 이 가산을 하지 않는다. 평소에는 감속이 곧바로 먹어치워
@@ -278,7 +307,9 @@ public sealed class SlimePhysicsEngine
         //    아직 가속할 힘이 있으므로 속도를 죽이지 않는다.
         //    중력이 있으면 "바닥에 있을 때"만 정지시킨다(포물선 정점의 순간 저속을 정지로 오인 방지).
         bool sleeping = false;
-        if (Velocity.Length < _settings.StopThreshold
+        // 자동 이동 중에는 임계 아래여도 죽이지 않는다 — 꼬물 속도가 임계보다 느리다.
+        if (!AutoMoving
+            && Velocity.Length < _settings.StopThreshold
             && Math.Abs(SurfaceSpin) < _settings.SurfaceSpinStopThreshold
             && (!gravity || IsGrounded()))
         {

@@ -174,6 +174,10 @@ public partial class SlimeWindow : Window
         // 무한 튕기기는 저장되므로, 켜 둔 채로 껐다 켜면 안내 없이 시작된다. 여기서 다시 띄운다.
         UpdateInfiniteBounceNotice();
 
+        // 자동 이동도 저장된다. 클릭 통과·중력·크기를 켤 때 바로 맞춘다.
+        ApplyAutoMove();
+        UpdateAutoMoveNotice();
+
         // 시작은 정지 상태이므로 렌더 루프를 돌리지 않는다(CPU 절감).
     }
 
@@ -257,6 +261,8 @@ public partial class SlimeWindow : Window
             else
                 Logger.Error("Mouse hotkey hook FAILED to install; 마우스 단축키가 동작하지 않습니다.");
         }
+
+        UpdateOpenSettingsHook();
     }
 
     /// <summary>
@@ -274,6 +280,59 @@ public partial class SlimeWindow : Window
     {
         if (_mouseHook != IntPtr.Zero) { UnhookWindowsHookEx(_mouseHook); _mouseHook = IntPtr.Zero; }
         _mouseProc = null;
+    }
+
+    // ── 설정 열기 단축키 : 전역 저수준 키보드 훅 ───────────────
+    // 두 칸 모두 아무 키나 받으므로 Windows 전역 단축키 API 로는 등록할 수 없다
+    // (그 API 는 왼쪽에 Ctrl/Shift/Alt/Win 만 받는다). 훅으로 직접 본다.
+    private const int WH_KEYBOARD_LL = 13;
+    private const int WM_KEYDOWN = 0x0100, WM_SYSKEYDOWN = 0x0104;
+    private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+    private LowLevelKeyboardProc? _keyProc;
+    private IntPtr _keyHook;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int id, LowLevelKeyboardProc cb, IntPtr hMod, uint thread);
+
+    private void UpdateOpenSettingsHook()
+    {
+        bool want = _settings.OpenSettingsHoldVk != 0 && _settings.OpenSettingsVk != 0;
+        if (!want)
+        {
+            RemoveOpenSettingsHook();
+            return;
+        }
+        if (_keyHook != IntPtr.Zero) return; // 이미 걸려 있으면 키 값만 바뀐 것이라 다시 걸 필요 없다
+
+        _keyProc = KeyboardHookProc;
+        _keyHook = SetWindowsHookEx(WH_KEYBOARD_LL, _keyProc, GetModuleHandle(null), 0);
+        if (_keyHook != IntPtr.Zero)
+            Logger.Info($"Open-settings hook installed (hold=0x{_settings.OpenSettingsHoldVk:X2}, " +
+                        $"key=0x{_settings.OpenSettingsVk:X2}).");
+        else
+            Logger.Error("Open-settings hook FAILED to install; 설정 열기 단축키가 동작하지 않습니다.");
+    }
+
+    private void RemoveOpenSettingsHook()
+    {
+        if (_keyHook != IntPtr.Zero) { UnhookWindowsHookEx(_keyHook); _keyHook = IntPtr.Zero; }
+        _keyProc = null;
+    }
+
+    private IntPtr KeyboardHookProc(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0 && ((int)wParam == WM_KEYDOWN || (int)wParam == WM_SYSKEYDOWN))
+        {
+            int vk = Marshal.ReadInt32(lParam);
+            int hold = _settings.OpenSettingsHoldVk, key = _settings.OpenSettingsVk;
+            // 앞 키를 '누르고 있는 동안' 뒤 키를 눌렀을 때만. 순서대로 치는 타이핑은 걸리지 않는다.
+            if (hold != 0 && key != 0 && vk == key && (GetAsyncKeyState(hold) & 0x8000) != 0)
+            {
+                try { Dispatcher.BeginInvoke(new Action(OpenSettingsPublic)); } catch { }
+                return (IntPtr)1; // 삼킴 — 뒤 창으로 Tab 이 넘어가지 않게
+            }
+        }
+        return CallNextHookEx(_keyHook, nCode, wParam, lParam);
     }
 
     private static bool ModifiersHeld(int m)
@@ -500,6 +559,9 @@ public partial class SlimeWindow : Window
     /// <summary>농구공 중력 가속도(px/s^2). 부드러운 낙하.</summary>
     private const double BasketballGravity = 2200.0;
 
+    /// <summary>작업표시줄 모드 중력(px/s^2). 튀지 않고 바로 내려앉을 만큼만.</summary>
+    private const double TaskbarGravity = 1600.0;
+
     /// <summary>젤리가 벽에 튈 때 반사 방향을 좌우로 흔드는 최대 각도(deg).
     /// 입사각을 아직 알아볼 수 있는 한계선이다 — 더 벌리면 벽 안쪽 반원 전체와 같아져
     /// 어느 방향에서 던졌든 결과 분포가 같아진다(= 입사각 무시).</summary>
@@ -520,8 +582,11 @@ public partial class SlimeWindow : Window
 
         bool basketball = _settings.Skin == SlimeSkinKind.Basketball;
         bool paperPlane = _settings.Skin == SlimeSkinKind.PaperPlane;
+        // 작업표시줄 모드는 중력으로 화면 아래에 붙여 놓고 좌우로만 걷게 한다.
+        bool taskbarWalk = _settings.AutoMove == AutoMoveMode.Taskbar;
         _physics.GravityY = basketball ? BasketballGravity
                           : paperPlane ? PaperGravity   // 종이답게 농구공보다 작은 중력
+                          : taskbarWalk ? TaskbarGravity
                           : 0.0;
         // 젤리만 벽에서 랜덤한 각도로 튄다. 당구공·볼링공은 정직한 반사가 컨셉이고,
         // 농구공·종이비행기는 중력으로 바닥을 치므로 랜덤이 걸리면 착지가 튄다.
@@ -1062,10 +1127,12 @@ public partial class SlimeWindow : Window
         }
 
         if (PaperPlaneOn) TickPaperPlaneAero(dt); // 종이비행기: 양력·흔들림·마우스 바람
+        TickAutoMove(dt);                         // 자동 이동: 추진력 갱신(꺼져 있으면 0)
 
         PhysicsStepResult r = _physics.Update(dt);
         if (r.Collided)
         {
+            OnAutoMoveCollision(r.CollisionNormal); // 꺾인 방향을 heading 에 반영(벽에 붙는 것 방지)
             _animation.OnImpact(r.MaxImpactSpeed);
             TriggerImpactEffects(r.MaxImpactSpeed, r.CollisionNormal, r.CollisionPosition);
             if (r.MaxImpactSpeed > _settings.ImpactReferenceSpeed * DizzyImpactFraction)
@@ -1257,6 +1324,22 @@ public partial class SlimeWindow : Window
             case nameof(AppSettings.InfiniteBounce):
                 UpdateInfiniteBounceNotice();
                 if (_settings.InfiniteBounce) EnsureRendering();
+                break;
+            case nameof(AppSettings.AutoMove):
+                ApplyAutoMove();
+                UpdateAutoMoveNotice();
+                break;
+            case nameof(AppSettings.CursorFollowSize):
+                ApplyWindowSize();
+                break;
+            case nameof(AppSettings.AutoMoveSpeed):
+            case nameof(AppSettings.AutoMoveMonitor):
+                if (AutoMoveOn) EnsureRendering();
+                break;
+            case nameof(AppSettings.OpenSettingsHoldVk):
+            case nameof(AppSettings.OpenSettingsVk):
+                UpdateOpenSettingsHook();
+                UpdateAutoMoveNotice(); // 안내에 적힌 단축키도 새로 맞춘다
                 break;
             case nameof(AppSettings.Paused):
                 if (!_settings.Paused) EnsureRendering();
@@ -3347,6 +3430,7 @@ public partial class SlimeWindow : Window
             UnregisterHotKey(_hwnd, WindHotkeyId); // 종이비행기 바람(활공 중에만 잡고 있던 것)
         }
         RemoveMouseTrigger();
+        RemoveOpenSettingsHook();
         _hwndSource?.RemoveHook(WndProc);
         _settings.PropertyChanged -= OnSettingsChanged;
         _monitors.LayoutChanged -= OnMonitorLayoutChanged;
