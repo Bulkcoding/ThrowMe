@@ -1278,6 +1278,10 @@ public partial class SlimeWindow : Window
     /// <summary>비행 중이면 해당 항목을 보류 목록에 넣고 true 를 반환(지금은 적용하지 않음).</summary>
     private bool DeferWhileFlying(string prop)
     {
+        // 자동 이동 중에는 공이 계속 움직여 '비행 중' 으로 잡힌다. 그대로 두면 보류한 변경이
+        // 멈출 때까지 기다리다 영영 반영되지 않는다 — 크기를 키워도 위치만 옮겨지고
+        // 커지지 않던 원인이다. 기어다니는 중에는 바로 적용해도 어색하지 않다.
+        if (AutoMoveOn) return false;
         if (!IsBallInFlight) return false;
         _deferredWhileFlying.Add(prop);
         return true;
