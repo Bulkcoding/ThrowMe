@@ -14,15 +14,13 @@
             <!-- 기어다닐 때는 원본 그림에서 잘라낸 컷을 그대로 쓴다.
                  도형을 코드로 그려 봤지만 통통한 돔과 둥근 꼬리가 나오지 않았다.
                  바닥선이 흔들리지 않도록 아래 정렬 + 가로 96 고정으로 둔다. -->
+            <!-- 폭을 84 로 둔다(96 상자에 좌우 6px 여백). 96 으로 꽉 채우면 뻗은 자세의
+                 꼬리 끝이 상자 경계에 정확히 닿아 잘려 보인다 — 예전 벡터 몸통도 Margin 6 이었다.
+                 아래 여백 4 는 바닥에 붙어도 끝이 깎이지 않게 하는 여유다. -->
             <Image x:Name="CrawlSprite" Visibility="Collapsed"
-                   Width="96" Stretch="Uniform"
+                   Width="84" Stretch="Uniform" Margin="0,0,0,4"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                   RenderTransformOrigin="0.5,0.5"
-                   RenderOptions.BitmapScalingMode="HighQuality">
-                <Image.RenderTransform>
-                    <ScaleTransform x:Name="CrawlFlip"/>
-                </Image.RenderTransform>
-            </Image>
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
 
             <Canvas x:Name="BodyLayer" Width="96" Height="96">
                 <Path x:Name="Body">

@@ -84,6 +84,22 @@ public partial class SlimeWindow
     /// <summary>이번 프레임의 뻗기 세기(0~1). 뻗는 구간에서만 0 보다 크다.</summary>
     private double _lunge;
 
+    /// <summary>
+    /// 지금 바라보는 쪽. <b>걸음이 끝날 때만</b> 바꾼다.
+    /// 매 프레임 진행 방향으로 판정하면, 방향이 위아래로 조금만 흔들려도 좌우 그림이
+    /// 번갈아 나와 제자리에서 떠는 것처럼 보인다.
+    /// </summary>
+    private bool _faceRight = true;
+
+    /// <summary>이보다 가로 성분이 작으면(거의 수직 이동) 바라보는 쪽을 바꾸지 않는다.</summary>
+    private const double FacingDeadzone = 0.25;
+
+    /// <summary>바라보는 쪽을 갱신한다. 가로 성분이 뚜렷할 때만 바꾼다.</summary>
+    private void UpdateFacing(double dx)
+    {
+        if (Math.Abs(dx) > FacingDeadzone) _faceRight = dx > 0;
+    }
+
     /// <summary>뻗기 직전 몸을 모으는 정도(0~1).</summary>
     private static double GatherCurve(double ph)
     {
@@ -112,7 +128,8 @@ public partial class SlimeWindow
     /// 기어다닐 때의 형태를 만든다 — 바닥에 눌린 납작한 몸 + 걸음에 맞춘 꼬물거림.
     /// 모을 때 세로로 볼록해지고, 뻗을 때 진행 방향으로 쭉 늘어난다.
     /// </summary>
-    private void ApplyCrawlShape(double headingRad, double lungeAmount)
+    /// <param name="seqT">컷 순서 안의 위치(0~1). 스킨이 그림을 직접 쓸 때만 의미가 있다.</param>
+    private void ApplyCrawlShape(double headingRad, double lungeAmount, double seqT)
     {
         if (_animation == null) return;
 
@@ -123,7 +140,7 @@ public partial class SlimeWindow
             // 크기 1·각도 0 으로 못박는다. null 로 두면 속도 기반 로직이 살아나
             // 진행 방향으로 몸 전체를 회전시켜, 평평해야 할 바닥이 비스듬해진다.
             _animation.CrawlShape = (1.0, 1.0, 0.0);
-            crawl.SetCrawlPose(lungeAmount, Math.Cos(headingRad) >= 0 ? 1 : -1);
+            crawl.SetCrawlPose(seqT, _faceRight);
             return;
         }
 
@@ -314,8 +331,9 @@ public partial class SlimeWindow
 
         // 뻗는 구간에만 민다. 나머지 구간에서는 목표 속도가 0 이라 제자리에 멎는다.
         // 평균이 설정 속도가 되도록 최고 속도를 duty 로 나눠 올린다.
+        if (stepDone) UpdateFacing(dir.X);   // 걸음이 끝날 때만 바라보는 쪽을 바꾼다
         _physics.Propulsion = SteerTo(dir * (speed / LungeDuty * _lunge));
-        ApplyCrawlShape(_autoHeading, _lunge);
+        ApplyCrawlShape(_autoHeading, _lunge, _stepPhase);
     }
 
     /// <summary>중력으로 화면 아래(작업표시줄 위)에 붙어 좌우로만 걷는다.</summary>
@@ -345,7 +363,8 @@ public partial class SlimeWindow
         // 뻗는 구간에만 밀어서, 한 발 내딛고 멈추기를 반복한다.
         double wantX = sign * speed / LungeDuty * _lunge;
         _physics.Propulsion = new Vector2(SteerTo(new Vector2(wantX, _physics.Velocity.Y)).X, 0);
-        ApplyCrawlShape(sign > 0 ? 0 : Math.PI, _lunge);
+        UpdateFacing(sign);
+        ApplyCrawlShape(sign > 0 ? 0 : Math.PI, _lunge, _stepPhase);
     }
 
     /// <summary>커서의 오른쪽 아래를 목표로 천천히 따라간다.</summary>
@@ -359,7 +378,7 @@ public partial class SlimeWindow
         if (!GetCursorPos(out var p))
         {
             _physics.Propulsion = Vector2.Zero;
-            ApplyCrawlShape(0, 0);
+            ApplyCrawlShape(0, 0, 0);
             return;
         }
 
@@ -376,7 +395,7 @@ public partial class SlimeWindow
         if (dist < 2.0)
         {
             _physics.Propulsion = Vector2.Zero;
-            ApplyCrawlShape(0, 0);
+            ApplyCrawlShape(0, 0, 0);
             return;
         }
 
@@ -386,6 +405,8 @@ public partial class SlimeWindow
 
         // 쫓는 세기에 맞춰 늘어난다 — 빨리 갈수록 진행 방향으로 길어진다.
         double eff = Math.Min(1.0, _physics.Velocity.Length / Math.Max(1.0, speed * 4));
-        ApplyCrawlShape(Math.Atan2(delta.Y, delta.X), eff);
+        // 커서를 쫓을 때는 걸음이 없으므로, 얼마나 빨리 가는지로 컷을 고른다(최대 = 가장 뻗은 컷).
+        if (Math.Abs(delta.X) > s * 0.3) UpdateFacing(delta.X);
+        ApplyCrawlShape(Math.Atan2(delta.Y, delta.X), eff, eff * 0.5);
     }
 }

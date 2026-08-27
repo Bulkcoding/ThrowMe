@@ -12,9 +12,9 @@ public interface ISkinCrawl
     /// <summary>
     /// 기어다니는 자세를 만든다.
     /// </summary>
-    /// <param name="lunge">뻗기 세기 0~1. 0이면 모은 돔, 1이면 앞으로 쭉 뻗은 모양.</param>
-    /// <param name="dirX">진행 방향. +1 이면 오른쪽, -1 이면 왼쪽(꼬리가 반대편에 생긴다).</param>
-    void SetCrawlPose(double lunge, double dirX);
+    /// <param name="t">걸음 주기 안의 위치 0~1. 이 값이 곧 몇 번째 컷을 보여줄지가 된다.</param>
+    /// <param name="faceRight">바라보는 쪽. 좌우 전용 컷이 따로 있으므로 그림을 뒤집지 않는다.</param>
+    void SetCrawlPose(double t, bool faceRight);
 
     /// <summary>평소의 동그란 모양으로 되돌린다.</summary>
     void ClearCrawlPose();
