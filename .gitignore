@@ -7,6 +7,8 @@ obj/
 # Publish output
 publish/
 *.exe.staging
+# 배포 산출물. GitHub 100MB 제한에 걸려 push 가 거절되므로 커밋하지 않고 gh release 로만 올린다.
+dist/
 
 # OS
 Thumbs.db
