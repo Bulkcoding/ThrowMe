@@ -32,6 +32,13 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
     /// <summary>모니터 구성/해상도 변경 시 발생.</summary>
     public event EventHandler? LayoutChanged;
 
+    /// <summary>
+    /// 참이면 충돌 판정을 작업 영역(작업표시줄 제외) 기준으로 한다.
+    /// 작업표시줄 걷기에서 켠다 — 작업표시줄 윗변이 바닥이 되어 아이콘을 가리지 않는다.
+    /// 평소(던지기)는 전체 영역 기준이라 모니터 사이 작업표시줄 틈도 넘어간다.
+    /// </summary>
+    public bool StayInWorkingAreas { get; set; }
+
     private bool _disposed;
 
     public MonitorLayoutService()
@@ -182,11 +189,12 @@ public sealed class MonitorLayoutService : IDisposable, IWalkableArea
         double cx = rect.Left + rect.Width / 2.0;
         double cy = rect.Top + rect.Height / 2.0;
 
-        return InsideMonitors(new Point(left, top))
-            && InsideMonitors(new Point(right, top))
-            && InsideMonitors(new Point(left, bottom))
-            && InsideMonitors(new Point(right, bottom))
-            && InsideMonitors(new Point(cx, cy));
+        Func<Point, bool> inside = StayInWorkingAreas ? IsInsideAny : InsideMonitors;
+        return inside(new Point(left, top))
+            && inside(new Point(right, top))
+            && inside(new Point(left, bottom))
+            && inside(new Point(right, bottom))
+            && inside(new Point(cx, cy));
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)

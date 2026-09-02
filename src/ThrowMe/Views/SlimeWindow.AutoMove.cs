@@ -70,20 +70,27 @@ public partial class SlimeWindow
     // 사람이 한 발 내딛고 멈추듯, 모았다가 쭉 뻗고 다시 멈추기를 반복한다.
 
     /// <summary>
-    /// 한 걸음에 나아가는 거리(공 지름 대비). <b>속도를 올려도 이 보폭은 그대로다</b> —
-    /// 대신 걸음이 빨라진다. 보폭이 늘어나면 기어가는 게 아니라 껑충 뛰는 모양이 된다.
+    /// 기준 속도(px/s)에서 한 걸음에 나아가는 거리(공 지름 대비).
+    /// 기어다니기·작업표시줄 걷기의 걸음 주기는 이 기준 속도로 고정하고, 설정 속도를 올리면
+    /// <b>걸음은 그대로 두고 한 걸음 거리만 늘어난다</b>(뻗는 순간 더 멀리 나간다).
     /// </summary>
     private const double StepDistanceFactor = 0.22;
+
+    /// <summary>걸음 주기를 정하는 기준 속도(px/s). 설정 속도와 무관하게 이 빠르기로 발을 놓는다.</summary>
+    private const double GaitBaseSpeed = 17.0;
 
     /// <summary>걸음 주기의 하한·상한(초).</summary>
     private const double StepPeriodMin = 0.22, StepPeriodMax = 3.0;
 
-    /// <summary>목표 속도에 맞는 걸음 주기. 빠를수록 짧아진다(보폭은 고정).</summary>
+    /// <summary>주어진 속도에 맞는 걸음 주기. 빠를수록 짧아진다. 커서 따라가기가 급할 때 쓴다.</summary>
     private double StepPeriodFor(double speed)
     {
         double stepDist = _settings.SlimeSize * StepDistanceFactor;
         return Math.Clamp(stepDist / Math.Max(1.0, speed), StepPeriodMin, StepPeriodMax);
     }
+
+    /// <summary>기어다니기·작업표시줄 걷기의 고정 걸음 주기(설정 속도와 무관).</summary>
+    private double FixedStepPeriod => StepPeriodFor(GaitBaseSpeed * _settings.DisplayScale);
 
     /// <summary>주기 안에서 실제로 밀고 나가는 구간(0~1). 나머지는 모으거나 멈춰 있다.</summary>
     private const double LungeFrom = 0.30, LungeTo = 0.68;
@@ -193,7 +200,6 @@ public partial class SlimeWindow
         UpdateSkinBehavior();
         // 작업표시줄과 커서 따라가기는 작업을 가리는 자리에 있으므로 클릭을 통과시킨다.
         SetClickThrough(_settings.AutoMove is AutoMoveMode.Taskbar or AutoMoveMode.CursorFollow);
-        ApplyWindowSize();   // 커서 따라가기는 크기가 다르다
         if (AutoMoveOn)
         {
             _autoHeading = _autoRng.NextDouble() * Math.PI * 2.0;
@@ -309,7 +315,8 @@ public partial class SlimeWindow
     private void TickRoam(double dt, double speed)
     {
         // 방향은 걸음과 걸음 사이(멈춰 있을 때)에만 튼다 — 뻗는 도중에 꺾이면 미끄러져 보인다.
-        bool stepDone = AdvanceStep(dt, StepPeriodFor(speed));
+        // 걸음 주기는 고정. 속도를 올리면 같은 주기 안에서 더 멀리 나간다(보폭만 늘어남).
+        bool stepDone = AdvanceStep(dt, FixedStepPeriod);
         double now = Now;
         if (stepDone && now >= _autoTurnAt)
         {
@@ -352,7 +359,8 @@ public partial class SlimeWindow
     /// <summary>중력으로 화면 아래(작업표시줄 위)에 붙어 좌우로만 걷는다.</summary>
     private void TickTaskbarWalk(double dt, double speed)
     {
-        bool stepDone = AdvanceStep(dt, StepPeriodFor(speed));
+        // 걸음 주기는 고정. 속도는 한 걸음 거리에만 반영된다.
+        bool stepDone = AdvanceStep(dt, FixedStepPeriod);
         double now = Now;
         if (stepDone && now >= _autoTurnAt)
         {
@@ -409,6 +417,7 @@ public partial class SlimeWindow
 
         // 멀수록 걸음을 빨리 놓는다. 보폭을 늘리는 게 아니라 <b>걸음이 빨라진다</b> —
         // 같은 속도로 쭉 미끄러져 오면 따라오는 게 아니라 끌려오는 것처럼 보인다.
+        // (기어다니기·작업표시줄 걷기의 고정 주기와 달리, 이 모드는 설정 속도가 주기에도 반영된다.)
         double urgency = Math.Clamp(dist / Math.Max(1.0, s * 1.5), 0.6, 5.0);
         bool stepDone = AdvanceStep(dt, StepPeriodFor(speed * urgency));
 

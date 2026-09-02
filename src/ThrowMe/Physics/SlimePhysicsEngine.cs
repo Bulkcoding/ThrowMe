@@ -271,7 +271,9 @@ public sealed class SlimePhysicsEngine
                             Velocity = Velocity.WithX(Velocity.X + AngularVelocity * _settings.SpinWallKick);
                         AngularVelocity *= _settings.SpinWallRetain;
                     }
-                    if (RandomBounceSpreadDeg > 0 && !randomized)
+                    // 자동 이동 + 중력(작업표시줄 걷기)에서는 바닥에 매 프레임 닿는다. 그때마다 랜덤 반사를
+                    // 걸면 가로 속도가 세로로 돌아간 뒤 착지 처리로 지워져, 걷는 모션만 있고 거의 나아가지 않는다.
+                    if (RandomBounceSpreadDeg > 0 && !randomized && !(gravity && AutoMoving))
                     {
                         RandomizeBounce(new Vector2(0, -Math.Sign(dy)));
                         randomized = true;

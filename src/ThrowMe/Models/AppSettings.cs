@@ -320,10 +320,8 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// 공만 실제 픽셀 고정이면 혼자 작아 보였다. 배율을 곱하면 어느 화면에서도 같은 크기로 보인다.
     /// 물리 충돌 상자도 이 값을 써야 그림과 어긋나지 않는다.
     /// </summary>
-    /// 커서 따라가기 중에는 <see cref="CursorFollowSize"/> 를 쓴다 — 이 모드만 크기가 크게 다르다.
     [JsonIgnore]   // 계산값이라 저장하지 않는다. 빼면 SlimeSizeBase 와 저장 키가 충돌한다.
-    public double SlimeSize =>
-        (_autoMove == AutoMoveMode.CursorFollow ? _cursorFollowSize : _slimeSize) * _displayScale;
+    public double SlimeSize => _slimeSize * _displayScale;
 
     /// <summary>말랑함(Slime Softness). Squash/Stretch 강도 스케일. 0~1</summary>
     private double _softness = 0.5;
@@ -445,7 +443,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         set
         {
             if (value != AutoMoveMode.Off && InfiniteBounce) InfiniteBounce = false;
-            if (Set(ref _autoMove, value)) Raise(nameof(SlimeSize)); // 커서 따라가기는 크기가 다르다
+            Set(ref _autoMove, value);
         }
     }
 
@@ -471,16 +469,6 @@ public sealed class AppSettings : INotifyPropertyChanged
         get => _cursorFollowStyle;
         set => Set(ref _cursorFollowStyle, value);
     }
-
-    /// <summary>커서 따라가기일 때 쓰는 지름(px). 평소 크기와 따로 둔다.</summary>
-    private double _cursorFollowSize = 400.0;
-    public double CursorFollowSize
-    {
-        get => _cursorFollowSize;
-        set { if (Set(ref _cursorFollowSize, value)) Raise(nameof(SlimeSize)); }
-    }
-
-    public const double MinCursorFollowSize = 48.0, MaxCursorFollowSize = 480.0;
 
     /// <summary>효과음 사용(Phase 4).</summary>
     private bool _soundEnabled = true;

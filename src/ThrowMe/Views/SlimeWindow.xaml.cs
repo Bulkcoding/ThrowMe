@@ -584,6 +584,8 @@ public partial class SlimeWindow : Window
         bool paperPlane = _settings.Skin == SlimeSkinKind.PaperPlane;
         // 작업표시줄 모드는 중력으로 화면 아래에 붙여 놓고 좌우로만 걷게 한다.
         bool taskbarWalk = _settings.AutoMove == AutoMoveMode.Taskbar;
+        // 작업표시줄 걷기에서는 작업표시줄 윗변을 바닥으로 삼아 아이콘을 가리지 않는다.
+        _monitors.StayInWorkingAreas = taskbarWalk;
         _physics.GravityY = basketball ? BasketballGravity
                           : paperPlane ? PaperGravity   // 종이답게 농구공보다 작은 중력
                           : taskbarWalk ? TaskbarGravity
@@ -592,7 +594,7 @@ public partial class SlimeWindow : Window
         // 농구공·종이비행기는 중력으로 바닥을 치므로 랜덤이 걸리면 착지가 튄다.
         _physics.RandomBounceSpreadDeg = _settings.Skin == SlimeSkinKind.Jelly ? JellyBounceSpreadDeg : 0.0;
         // 중력으로 즉시 낙하하도록 렌더 루프를 깨운다(초기화 완료 후에만; _animation 준비 뒤).
-        if (basketball && _animation != null) EnsureRendering();
+        if ((basketball || taskbarWalk) && _animation != null) EnsureRendering();
         if (_animation != null) ApplyPaperPlaneBehavior(); // 종이비행기 전용 물리·표시(다른 테마면 되돌림)
     }
 
@@ -1338,9 +1340,6 @@ public partial class SlimeWindow : Window
             case nameof(AppSettings.AutoMove):
                 ApplyAutoMove();
                 UpdateAutoMoveNotice();
-                break;
-            case nameof(AppSettings.CursorFollowSize):
-                ApplyWindowSize();
                 break;
             case nameof(AppSettings.AutoMoveSpeed):
             case nameof(AppSettings.AutoMoveMonitor):

@@ -275,7 +275,7 @@
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="이동 속도" Style="{StaticResource RowLabel}"/>
-                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="자동으로 움직일 때의 속도입니다. 낮을수록 꼬물꼬물 기어갑니다."/>
+                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="자동으로 움직일 때의 속도입니다. 올리면 걸음 빠르기는 그대로 두고 한 걸음 거리가 늘어납니다.&#10;커서 따라가기는 예외로, 멀수록 걸음도 빨라집니다."/>
                                                     </StackPanel>
                                                     <TextBlock Text="초당 몇 픽셀씩 갈지." Style="{StaticResource RowDesc}"/>
                                                 </StackPanel>
@@ -318,24 +318,6 @@
                                                     <ComboBoxItem Content="따라오기"/>
                                                     <ComboBoxItem Content="키링"/>
                                                 </ComboBox>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="따라다닐 때 크기" Style="{StaticResource RowLabel}"/>
-                                                        <TextBlock Style="{StaticResource InfoIcon}" ToolTip="커서 따라가기일 때만 쓰는 지름입니다. 평소 크기와 따로 저장됩니다."/>
-                                                    </StackPanel>
-                                                    <TextBlock Text="커서 따라가기 전용." Style="{StaticResource RowDesc}"/>
-                                                </StackPanel>
-                                                <Grid Grid.Column="1" VerticalAlignment="Center">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
-                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}"
-                                                            Minimum="48" Maximum="480" Value="{Binding CursorFollowSize}"/>
-                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding CursorFollowSize, StringFormat={}{0:0}px}"/>
-                                                </Grid>
                                             </Grid>
                                         </StackPanel>
                                     </Border>
