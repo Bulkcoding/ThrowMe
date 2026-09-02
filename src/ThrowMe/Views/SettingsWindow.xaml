@@ -249,6 +249,10 @@
                                                 <TextBlock Style="{StaticResource CardIcon}" Text="&#xE81D;"/>
                                                 <TextBlock Style="{StaticResource CardTitle}" Text="자동 이동"/>
                                             </StackPanel>
+                                            <TextBlock x:Name="AutoMoveLockedNotice" Visibility="Collapsed" Margin="0,-6,0,12" TextWrapping="Wrap"
+                                                       Style="{StaticResource RowDesc}"
+                                                       Text="슬라임 테마에서만 쓸 수 있어요. 테마 탭에서 슬라임을 고르면 켤 수 있습니다."/>
+                                            <StackPanel x:Name="AutoMoveRows">
 
                                             <Grid>
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
@@ -319,6 +323,7 @@
                                                     <ComboBoxItem Content="키링"/>
                                                 </ComboBox>
                                             </Grid>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
 

@@ -56,6 +56,7 @@ public partial class SettingsWindow : Window
         UpdateWindKeyText();
         UpdateInfiniteBounceLocks();
         BuildAutoMoveSection();
+        UpdateAutoMoveLock();
         UpdateBilliardSection();
         UpdateCustomImageSection();
         _settings.PropertyChanged += OnSettingsPropertyChanged;
@@ -90,9 +91,14 @@ public partial class SettingsWindow : Window
                 HighlightSelectedSkin();
                 UpdateBilliardSection();
                 UpdateCustomImageSection();
+                UpdateAutoMoveLock();
                 break;
             case nameof(AppSettings.InfiniteBounce):
                 UpdateInfiniteBounceLocks();
+                break;
+            case nameof(AppSettings.AutoMove):
+                // 테마 변경·무한 튕기기로 밖에서 꺼진 경우 콤보 표시를 맞춘다.
+                SyncAutoMoveBox();
                 break;
             case nameof(AppSettings.SkinImages):
             case nameof(AppSettings.SkinImageEnabled):
@@ -807,6 +813,24 @@ public partial class SettingsWindow : Window
                 { sel = i; break; }
             AutoMoveMonitorBox.SelectedIndex = sel;
         }
+        finally { _fillingAutoMove = false; }
+    }
+
+    /// <summary>자동 이동은 슬라임(젤리) 테마 전용. 다른 테마에서는 카드를 잠그고 이유를 보여 준다.</summary>
+    private void UpdateAutoMoveLock()
+    {
+        bool locked = _settings.Skin != SlimeSkinKind.Jelly;
+        AutoMoveLockedNotice.Visibility = locked ? Visibility.Visible : Visibility.Collapsed;
+        AutoMoveRows.IsEnabled = !locked;
+        AutoMoveRows.Opacity = locked ? 0.45 : 1.0;
+    }
+
+    /// <summary>설정값이 밖에서 바뀌었을 때 콤보 상자 표시를 맞춘다(핸들러가 다시 쓰지 않게 막고).</summary>
+    private void SyncAutoMoveBox()
+    {
+        if (AutoMoveBox.SelectedIndex == (int)_settings.AutoMove) return;
+        _fillingAutoMove = true;
+        try { AutoMoveBox.SelectedIndex = (int)_settings.AutoMove; }
         finally { _fillingAutoMove = false; }
     }
 

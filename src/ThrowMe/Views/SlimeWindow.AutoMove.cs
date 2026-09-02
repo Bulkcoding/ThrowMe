@@ -37,7 +37,7 @@ public partial class SlimeWindow
     /// <summary>
     /// 창을 클릭 통과로 만든다(작업표시줄·커서 따라가기 모드).
     /// 이 모드에서는 슬라임이 작업 위를 돌아다니므로, 클릭을 받으면 뒤에 있는 창의 조작을 삼킨다.
-    /// 잡기 단축키는 전역 훅이라 클릭 통과여도 그대로 동작한다.
+    /// 자동 이동 중에는 잡기 단축키도 무시한다 — 스스로 걷는 중에 커서로 끌어오면 걷기가 깨진다.
     /// </summary>
     private void SetClickThrough(bool on)
     {
@@ -189,9 +189,8 @@ public partial class SlimeWindow
         && !_settings.Paused
         && _settings.SlimeVisible
         && !BowlingOn
-        // 중력 테마는 바닥에 붙어 있어 기어다니는 모양이 안 나온다(작업표시줄 모드는 스스로 중력을 쓴다).
-        && (_settings.AutoMove == AutoMoveMode.Taskbar
-            || (_settings.Skin != SlimeSkinKind.Basketball && _settings.Skin != SlimeSkinKind.PaperPlane));
+        // 슬라임(젤리) 전용. 설정에서도 막지만, 저장 파일이 어긋난 경우를 대비해 여기서도 확인한다.
+        && _settings.Skin == SlimeSkinKind.Jelly;
 
     /// <summary>설정이 바뀌면 창 속성·중력을 다시 맞춘다.</summary>
     private void ApplyAutoMove()
@@ -200,6 +199,7 @@ public partial class SlimeWindow
         UpdateSkinBehavior();
         // 작업표시줄과 커서 따라가기는 작업을 가리는 자리에 있으므로 클릭을 통과시킨다.
         SetClickThrough(_settings.AutoMove is AutoMoveMode.Taskbar or AutoMoveMode.CursorFollow);
+        ApplyCustomImage();  // 자동 이동 중에는 커스텀 이미지를 숨긴다(걸음 자세와 안 맞음)
         if (AutoMoveOn)
         {
             _autoHeading = _autoRng.NextDouble() * Math.PI * 2.0;

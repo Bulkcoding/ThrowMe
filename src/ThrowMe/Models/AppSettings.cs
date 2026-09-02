@@ -435,13 +435,17 @@ public sealed class AppSettings : INotifyPropertyChanged
     public int OpenSettingsVk { get => _openSettingsVk; set => Set(ref _openSettingsVk, value); }
 
     // ── 자동 이동 ───────────────────────────────────────────
-    /// <summary>슬라임이 스스로 움직이는 방식. <see cref="InfiniteBounce"/> 와는 배타적이다.</summary>
+    /// <summary>
+    /// 슬라임이 스스로 움직이는 방식. <see cref="InfiniteBounce"/> 와는 배타적이며,
+    /// 슬라임(젤리) 테마에서만 켤 수 있다(다른 테마는 기어다니는 그림이 없다).
+    /// </summary>
     private AutoMoveMode _autoMove = AutoMoveMode.Off;
     public AutoMoveMode AutoMove
     {
         get => _autoMove;
         set
         {
+            if (value != AutoMoveMode.Off && _skin != SlimeSkinKind.Jelly) value = AutoMoveMode.Off;
             if (value != AutoMoveMode.Off && InfiniteBounce) InfiniteBounce = false;
             Set(ref _autoMove, value);
         }
@@ -559,7 +563,16 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     /// <summary>표시할 스킨(젤리/당구공 등).</summary>
     private SlimeSkinKind _skin = SlimeSkinKind.Jelly;
-    public SlimeSkinKind Skin { get => _skin; set => Set(ref _skin, value); }
+    public SlimeSkinKind Skin
+    {
+        get => _skin;
+        set
+        {
+            if (!Set(ref _skin, value)) return;
+            // 자동 이동은 슬라임(젤리) 전용이다. 다른 테마로 바꾸면 끈다.
+            if (value != SlimeSkinKind.Jelly && _autoMove != AutoMoveMode.Off) AutoMove = AutoMoveMode.Off;
+        }
+    }
 
     /// <summary>큐대로 때리기 모드(당구공 전용). 켜면 공 근처 클릭→큐대 당겨 밀어서 발사.</summary>
     private bool _cueStickMode;

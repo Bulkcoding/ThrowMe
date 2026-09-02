@@ -366,6 +366,7 @@ public partial class SlimeWindow : Window
                 return (IntPtr)1; // 삼킴(다른 창으로 전달 안 함)
             }
             if (_settings.CatchHotkeyMouse != 0
+                && !AutoMoveOn   // 자동 이동 중에는 잡기 클릭을 삼키지 않고 그대로 흘려보낸다
                 && msg == MouseMsgFor(_settings.CatchHotkeyMouse)
                 && ModifiersHeld(_settings.CatchHotkeyMod))
             {
@@ -462,6 +463,9 @@ public partial class SlimeWindow : Window
         // 숨겨 둔 공이 잡기 단축키만 눌러도 다시 나타났다. 다시 보이게 하는 건
         // 숨기기 단축키(또는 설정의 `슬라임 표시`)만 할 수 있어야 한다.
         if (!_settings.SlimeVisible) return;
+        // 자동 이동 중에는 잡지 않는다. 스스로 걷는 중에 커서로 끌어오면 걷기가 깨지고,
+        // 클릭 통과 모드(작업표시줄·커서 따라가기)의 취지와도 어긋난다.
+        if (AutoMoveOn) return;
 
         Vector2 cursor = CursorPhysical();
         double half = _settings.SlimeSize / 2.0;
@@ -1415,10 +1419,11 @@ public partial class SlimeWindow : Window
         ApplyCustomImage();
     }
 
-    /// <summary>현재 테마의 커스텀 이미지를 공 위에 덧씌운다(없거나 끄면 숨김).</summary>
+    /// <summary>현재 테마의 커스텀 이미지를 공 위에 덧씌운다(없거나 끄면 숨김). 자동 이동 중에는 숨긴다.</summary>
     private void ApplyCustomImage()
     {
-        var img = _settings.SkinImageEnabled && SkinImageStore.Supports(_settings.Skin)
+        // 자동 이동 중에는 걸음 자세(원본 컷)가 그려지므로, 그 위에 고정 이미지를 덧씌우면 어긋난다.
+        var img = _settings.SkinImageEnabled && !AutoMoveOn && SkinImageStore.Supports(_settings.Skin)
             ? SkinImageStore.Load(_settings.Skin)
             : null;
 
