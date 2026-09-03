@@ -171,6 +171,7 @@ public partial class SettingsWindow
 
     private static string StateText(AgentState s) => s switch
     {
+        AgentState.Done => "완료",
         AgentState.Thinking => "생각 중",
         AgentState.Working => "작업 중",
         AgentState.Juggling => "서브에이전트 실행 중",

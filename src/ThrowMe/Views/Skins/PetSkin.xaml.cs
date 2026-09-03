@@ -60,8 +60,12 @@ public partial class PetSkin : UserControl
     public void SetAgentState(AgentState s)
     {
         if (_agent == s) return;
+        var prev = _agent;
         _agent = s;
-        if (!_oneShot && _motionDir == 0) Play(BaseRowKey(), loop: true);
+        if (_motionDir != 0) return;   // 날아가는 중이면 달리기가 우선. 멎으면 바탕으로 돌아온다.
+        // 완료(점프) → 대기로 내려갈 때는 clawd 처럼 한 번 둘러보고(review) 쉰다.
+        if (prev == AgentState.Done && s == AgentState.Idle) { PlayOnce("review"); return; }
+        if (!_oneShot) Play(BaseRowKey(), loop: true);
     }
 
     /// <summary>작업 완료 등 한 번 보여 주고 끝나는 동작. 없으면 무시.</summary>
@@ -87,6 +91,7 @@ public partial class PetSkin : UserControl
     // ── 내부 ─────────────────────────────────────────────
     private string BaseRowKey() => _agent switch
     {
+        AgentState.Done => "jumping",
         AgentState.Thinking => "review",
         AgentState.Working => "running",
         AgentState.Juggling => "jumping",

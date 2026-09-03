@@ -14,7 +14,10 @@ namespace ThrowMe.Services;
 /// 훅에 넘겨 주는 JSON(stdin)을 본문으로 그대로 보낸다. 응답은 항상 204(본문 없음)여야 한다 —
 /// 일부 훅(UserPromptSubmit 등)은 명령의 stdout 을 대화 맥락에 넣기 때문이다.
 ///
-/// 세션은 session_id 로 구분하고, 여러 세션이 있으면 우선순위가 높은 상태(<see cref="AgentState"/>)를 보여 준다.
+/// 보여 줄 상태는 <b>가장 최근에 이벤트를 보낸 세션</b>의 것이다. 여러 세션이 있을 때 우선순위 최댓값을
+/// 쓰면, 다른 창(예: IDE 안에서 도는 에이전트)이 계속 도구를 쓰는 동안 내가 보고 있는 CLI 의 완료가
+/// 묻혀 버린다. 단, 기다림·오류는 어느 세션에서 나든 잠깐(<see cref="AttentionHold"/>) 우선한다.
+/// Stop 은 <see cref="AgentState.Done"/> 으로 들어와 <see cref="DoneHold"/> 뒤 저절로 Idle 이 된다.
 /// 10분 동안 아무 이벤트가 없는 세션은 잊는다(비정상 종료 대비).
 /// </summary>
 public sealed class CliStateServer
@@ -24,13 +27,23 @@ public sealed class CliStateServer
         public AgentState State;
         public int Subagents;
         public DateTime LastSeen;
+        public DateTime StateSince;
+        public string Cwd = "";
     }
 
+    /// <summary>세션 표시용 스냅샷.</summary>
+    public sealed record SessionInfo(string Id, AgentState State, string Cwd, DateTime LastSeen);
+
     private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(10);
+    /// <summary>턴 완료(Done) 표시를 유지하는 시간. 지나면 Idle.</summary>
+    private static readonly TimeSpan DoneHold = TimeSpan.FromSeconds(5);
+    /// <summary>다른 세션의 기다림·오류가 최근 세션보다 우선하는 시간.</summary>
+    private static readonly TimeSpan AttentionHold = TimeSpan.FromSeconds(90);
 
     private readonly int _port;
     private readonly ConcurrentDictionary<string, Session> _sessions = new();
     private HttpListener? _listener;
+    private System.Threading.Timer? _tick;
     private AgentState _last = AgentState.Idle;
 
     public bool IsRunning { get; private set; }
@@ -39,8 +52,6 @@ public sealed class CliStateServer
 
     /// <summary>합친 상태가 바뀌었다(백그라운드 스레드에서 발생 — UI 는 Dispatcher 로 넘길 것).</summary>
     public event EventHandler<AgentState>? StateChanged;
-    /// <summary>어느 세션이 한 턴을 끝냈다(Stop). 손 흔들기 같은 일회성 반응용.</summary>
-    public event EventHandler? TurnFinished;
     /// <summary>세션 수 등 표시용 정보가 바뀌었다.</summary>
     public event EventHandler? SessionsChanged;
 
@@ -57,6 +68,20 @@ public sealed class CliStateServer
         }
     }
 
+    /// <summary>살아 있는 세션 목록(최근 활동순).</summary>
+    public IReadOnlyList<SessionInfo> Sessions
+    {
+        get
+        {
+            var cutoff = DateTime.UtcNow - SessionTtl;
+            return _sessions
+                .Where(kv => kv.Value.LastSeen >= cutoff)
+                .OrderByDescending(kv => kv.Value.LastSeen)
+                .Select(kv => new SessionInfo(kv.Key, kv.Value.State, kv.Value.Cwd, kv.Value.LastSeen))
+                .ToList();
+        }
+    }
+
     public void Start()
     {
         if (IsRunning) return;
@@ -69,6 +94,8 @@ public sealed class CliStateServer
             IsRunning = true;
             LastError = null;
             _ = Task.Run(() => Loop(l));
+            // Done → Idle 내려가기, 오래된 세션 정리는 이벤트가 없어도 일어나야 하므로 주기적으로 다시 계산한다.
+            _tick = new System.Threading.Timer(_ => { try { Recompute(); } catch { } }, null, 1000, 1000);
             Logger.Info($"CLI state server listening on 127.0.0.1:{_port}.");
         }
         catch (Exception ex)
@@ -84,6 +111,8 @@ public sealed class CliStateServer
         var l = _listener;
         _listener = null;
         IsRunning = false;
+        try { _tick?.Dispose(); } catch { }
+        _tick = null;
         try { l?.Stop(); l?.Close(); } catch { }
         _sessions.Clear();
         SetAggregate(AgentState.Idle);
@@ -118,7 +147,8 @@ public sealed class CliStateServer
             else if (req.HttpMethod == "GET" && req.Url?.AbsolutePath == "/health")
             {
                 ctx.Response.StatusCode = 200;
-                byte[] b = Encoding.UTF8.GetBytes("{\"app\":\"ThrowMe\",\"state\":\"" + _last + "\"}");
+                var sessions = string.Join(",", Sessions.Select(s => $"{{\"id\":\"{s.Id}\",\"state\":\"{s.State}\",\"cwd\":{JsonSerializer.Serialize(s.Cwd)}}}"));
+                byte[] b = Encoding.UTF8.GetBytes($"{{\"app\":\"ThrowMe\",\"state\":\"{_last}\",\"sessions\":[{sessions}]}}");
                 ctx.Response.ContentType = "application/json";
                 ctx.Response.OutputStream.Write(b, 0, b.Length);
             }
@@ -138,7 +168,7 @@ public sealed class CliStateServer
     private void Apply(string ev, string body)
     {
         string sid = "default";
-        string toolName = "", notificationType = "";
+        string toolName = "", notificationType = "", cwd = "";
         try
         {
             if (!string.IsNullOrWhiteSpace(body))
@@ -155,13 +185,15 @@ public sealed class CliStateServer
                         toolName = te.GetString() ?? "";
                     if (root.TryGetProperty("notification_type", out var ne) && ne.ValueKind == JsonValueKind.String)
                         notificationType = ne.GetString() ?? "";
+                    if (root.TryGetProperty("cwd", out var ce) && ce.ValueKind == JsonValueKind.String)
+                        cwd = ce.GetString() ?? "";
                 }
             }
         }
         catch { /* 본문이 JSON 이 아니어도 이벤트 이름만으로 처리한다 */ }
 
         if (string.IsNullOrEmpty(ev)) return;
-        bool turnDone = false;
+        var now = DateTime.UtcNow;
 
         if (ev == "SessionEnd")
         {
@@ -169,8 +201,10 @@ public sealed class CliStateServer
         }
         else
         {
-            var s = _sessions.GetOrAdd(sid, _ => new Session());
-            s.LastSeen = DateTime.UtcNow;
+            var s = _sessions.GetOrAdd(sid, _ => new Session { StateSince = now });
+            s.LastSeen = now;
+            if (cwd.Length > 0) s.Cwd = cwd;
+            var before = s.State;
             switch (ev)
             {
                 case "SessionStart": s.State = AgentState.Idle; s.Subagents = 0; break;
@@ -187,7 +221,7 @@ public sealed class CliStateServer
                     s.Subagents = Math.Max(0, s.Subagents - 1);
                     s.State = s.Subagents > 0 ? AgentState.Juggling : AgentState.Working;
                     break;
-                case "Stop": s.State = AgentState.Idle; s.Subagents = 0; turnDone = true; break;
+                case "Stop": s.State = AgentState.Done; s.Subagents = 0; break;
                 case "StopFailure": s.State = AgentState.Error; s.Subagents = 0; break;
                 case "PermissionRequest":
                 case "Elicitation": s.State = AgentState.Waiting; break;
@@ -199,23 +233,45 @@ public sealed class CliStateServer
                 case "PostCompact": s.State = AgentState.Thinking; break;
                 default: break; // 모르는 이벤트는 마지막 접촉 시각만 갱신
             }
+            if (s.State != before) s.StateSince = now;
         }
 
         Recompute();
-        if (turnDone) TurnFinished?.Invoke(this, EventArgs.Empty);
+        Logger.Info($"CLI event {ev} sid={Short(sid)} tool={toolName} -> shown={_last}, sessions={SessionCount}");
         SessionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private static string Short(string sid) => sid.Length > 8 ? sid[..8] : sid;
+
+    /// <summary>
+    /// 보여 줄 상태를 다시 고른다. 오래된 세션 정리, Done 만료도 여기서 한다.
+    /// 기본은 최근 활동 세션의 상태. 최근 <see cref="AttentionHold"/> 안에 기다림·오류가 된 세션이 있으면 그것이 이긴다.
+    /// </summary>
     private void Recompute()
     {
-        var cutoff = DateTime.UtcNow - SessionTtl;
-        var agg = AgentState.Idle;
+        var now = DateTime.UtcNow;
+        var cutoff = now - SessionTtl;
+        Session? latest = null;
+        AgentState attention = AgentState.Idle;
+        bool changedSessions = false;
+
         foreach (var (key, s) in _sessions)
         {
-            if (s.LastSeen < cutoff) { _sessions.TryRemove(key, out _); continue; }
-            if (s.State > agg) agg = s.State;
+            if (s.LastSeen < cutoff) { _sessions.TryRemove(key, out _); changedSessions = true; continue; }
+            if (s.State == AgentState.Done && now - s.StateSince >= DoneHold)
+            {
+                s.State = AgentState.Idle;
+                s.StateSince = now;
+                changedSessions = true;
+            }
+            if (latest == null || s.LastSeen > latest.LastSeen) latest = s;
+            if (s.State >= AgentState.Waiting && now - s.StateSince < AttentionHold && s.State > attention)
+                attention = s.State;
         }
-        SetAggregate(agg);
+
+        var shown = attention != AgentState.Idle ? attention : (latest?.State ?? AgentState.Idle);
+        SetAggregate(shown);
+        if (changedSessions) SessionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void SetAggregate(AgentState s)

@@ -32,7 +32,6 @@ public partial class SlimeWindow
             {
                 _cli = new CliStateServer(AppSettings.CliLinkPort);
                 _cli.StateChanged += (_, s) => Dispatcher.BeginInvoke(() => OnAgentState(s));
-                _cli.TurnFinished += (_, _) => Dispatcher.BeginInvoke(OnAgentTurnFinished);
                 _cli.SessionsChanged += (_, _) => Dispatcher.BeginInvoke(() => CliStatusChanged?.Invoke(this, EventArgs.Empty));
             }
             _cli.Start();
@@ -52,9 +51,6 @@ public partial class SlimeWindow
         (SkinHost.Content as PetSkin)?.SetAgentState(s);
         CliStatusChanged?.Invoke(this, EventArgs.Empty);
     }
-
-    /// <summary>한 턴이 끝났다 → 손 흔들기 한 번.</summary>
-    private void OnAgentTurnFinished() => (SkinHost.Content as PetSkin)?.PlayOnce("waving");
 
     /// <summary>설정 창에서 팩을 가져오거나 지운 뒤, 같은 테마여도 스킨을 새로 그리게 한다.</summary>
     public void ReapplySkinPublic() => ApplySkinChange();
