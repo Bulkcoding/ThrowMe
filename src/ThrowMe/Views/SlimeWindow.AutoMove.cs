@@ -204,6 +204,12 @@ public partial class SlimeWindow
         {
             _autoHeading = _autoRng.NextDouble() * Math.PI * 2.0;
             _autoTurnAt = 0;
+            // 다른 테마에서 회전(스핀)을 하고 돌아왔더라도, 자동 이동을 켜면 바닥이 아래로
+            // 오도록 회전 상태를 초기화한다. 렌더 회전각 = 걸음각(0) + 물리 스핀각 이라,
+            // 남아 있는 스핀각을 지우지 않으면 기울어진 채 걷는다.
+            _physics.SpinAngle = 0;
+            _physics.AngularVelocity = 0;
+            _physics.SurfaceSpin = 0;
             EnsureRendering();
         }
         else _physics.Propulsion = Vector2.Zero;
@@ -286,6 +292,9 @@ public partial class SlimeWindow
             return;
         }
         _physics.AutoMoving = true;
+        // 자동 이동 중에는 스핀 회전이 남지 않게 유지한다(기울어진 채 걷지 않도록).
+        _physics.SpinAngle = 0;
+        _physics.AngularVelocity = 0;
 
         // 목표 속도(px/s). 화면 배율을 곱해 어느 화면에서도 같은 빠르기로 보이게 한다.
         double speed = _settings.AutoMoveSpeed * _settings.DisplayScale;
