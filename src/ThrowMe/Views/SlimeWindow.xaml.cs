@@ -1539,6 +1539,8 @@ public partial class SlimeWindow : Window
         MenuBowlingReset.Visibility = bowl && BowlingOn ? Visibility.Visible : Visibility.Collapsed;
         MenuBowlingExit.Visibility = bowl && BowlingOn ? Visibility.Visible : Visibility.Collapsed;
 
+        FillSessionMenu(); // Claude Code 세션 목록(CLI 연동이 켜져 있을 때)
+
         // 현재 버전(안내용). 설정 → 업데이트 노트에서 무엇이 바뀌었는지 볼 수 있다.
         MenuVersion.Header = $"ThrowMe v{UpdateService.Current.ToString(3)}";
     }

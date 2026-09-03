@@ -169,16 +169,7 @@ public partial class SettingsWindow
         CliStatusText.Text = string.Join("   ·   ", new[] { server, hooks, state }.Where(s => s.Length > 0));
     }
 
-    private static string StateText(AgentState s) => s switch
-    {
-        AgentState.Done => "완료",
-        AgentState.Thinking => "생각 중",
-        AgentState.Working => "작업 중",
-        AgentState.Juggling => "서브에이전트 실행 중",
-        AgentState.Waiting => "승인 대기",
-        AgentState.Error => "오류",
-        _ => "대기",
-    };
+    private static string StateText(AgentState s) => SlimeWindow.StateLabel(s);
 
     private void OnInstallHooks(object sender, RoutedEventArgs e)
     {

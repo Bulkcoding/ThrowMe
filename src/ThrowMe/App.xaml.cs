@@ -127,7 +127,9 @@ public partial class App : Application
             // 여기서 감싸지 않으면 설정창 생성 중 오류가 그대로 ".NET 오류 대화상자"로 튀어나온다.
             openSettings: () => SafeTrayAction(() => _slimeWindow?.OpenSettingsPublic(), "openSettings"),
             resetPosition: () => SafeTrayAction(() => _slimeWindow?.ResetPositionPublic(), "resetPosition"),
-            exit: () => SafeTrayAction(Shutdown, "exit"));
+            exit: () => SafeTrayAction(Shutdown, "exit"),
+            sessions: () => _slimeWindow?.SessionMenuEntries() ?? Array.Empty<(string, string?)>(),
+            openFolder: f => SafeTrayAction(() => SlimeWindow.OpenFolder(f), "openFolder"));
 
         // 설정 변경 시 디바운스 자동 저장.
         _store.AttachAutoSave(_settings);

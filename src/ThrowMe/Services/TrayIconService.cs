@@ -23,7 +23,8 @@ public sealed class TrayIconService : IDisposable
     [DllImport("user32.dll")]
     private static extern bool DestroyIcon(IntPtr handle);
 
-    public TrayIconService(AppSettings settings, Action openSettings, Action resetPosition, Action exit)
+    public TrayIconService(AppSettings settings, Action openSettings, Action resetPosition, Action exit,
+        Func<IReadOnlyList<(string Text, string? Folder)>>? sessions = null, Action<string?>? openFolder = null)
     {
         _settings = settings;
 
@@ -37,6 +38,32 @@ public sealed class TrayIconService : IDisposable
         var menu = new ContextMenuStrip();
         menu.Items.Add("설정...", null, (_, _) => openSettings());
         menu.Items.Add("위치 초기화", null, (_, _) => resetPosition());
+
+        // Claude Code 세션 목록. 작업표시줄 걷기·커서 따라가기는 클릭 통과라 슬라임 우클릭이 닿지 않으므로 여기에도 둔다.
+        if (sessions != null)
+        {
+            var sessionsItem = new ToolStripMenuItem("Claude Code 세션");
+            menu.Items.Add(sessionsItem);
+            menu.Opening += (_, _) =>
+            {
+                sessionsItem.DropDownItems.Clear();
+                IReadOnlyList<(string Text, string? Folder)> list;
+                try { list = sessions(); } catch { list = Array.Empty<(string, string?)>(); }
+                sessionsItem.Text = list.Count == 0 ? "Claude Code 세션 — 없음" : $"Claude Code 세션 ({list.Count})";
+                if (list.Count == 0)
+                {
+                    sessionsItem.DropDownItems.Add(new ToolStripMenuItem("살아 있는 세션이 없습니다") { Enabled = false });
+                    return;
+                }
+                foreach (var (text, folder) in list)
+                {
+                    var it = new ToolStripMenuItem(text) { Enabled = folder != null, ToolTipText = folder };
+                    string? f = folder;
+                    it.Click += (_, _) => openFolder?.Invoke(f);
+                    sessionsItem.DropDownItems.Add(it);
+                }
+            };
+        }
         menu.Items.Add(new ToolStripSeparator());
 
         _visibleItem = new ToolStripMenuItem("슬라임 표시") { CheckOnClick = true, Checked = settings.SlimeVisible };

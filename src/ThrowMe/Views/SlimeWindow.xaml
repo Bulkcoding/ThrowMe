@@ -25,6 +25,9 @@
         <ContextMenu Style="{StaticResource DarkMenu}" Opened="OnMenuOpened">
             <MenuItem Header="설정" Click="OnOpenSettings" Style="{StaticResource DarkMenuItem}" FontWeight="SemiBold"/>
             <MenuItem Header="위치 초기화" Click="OnResetPosition" Style="{StaticResource DarkMenuItem}"/>
+            <Separator x:Name="MenuSessionsSep" Style="{StaticResource DarkSeparator}"/>
+            <!-- Claude Code 세션 목록(안내 헤더). 세션 항목은 메뉴가 열릴 때 코드가 아래에 끼워 넣는다. 항목을 누르면 작업 폴더가 열린다. -->
+            <MenuItem x:Name="MenuSessionsHeader" Header="Claude Code 세션" IsEnabled="False" Style="{StaticResource DarkMenuItem}"/>
             <Separator x:Name="MenuBilliardSep" Style="{StaticResource DarkSeparator}"/>
             <MenuItem x:Name="Menu4Ball" Header="4구 놓기 (빨강2·노랑1)" Click="On4Ball" Style="{StaticResource DarkMenuItem}"/>
             <MenuItem x:Name="Menu3Ball" Header="3구 놓기 (빨강1·노랑1)" Click="On3Ball" Style="{StaticResource DarkMenuItem}"/>
