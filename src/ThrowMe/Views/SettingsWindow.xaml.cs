@@ -51,6 +51,9 @@ public partial class SettingsWindow : Window
         DwmChrome.AttachTo(this); // 둥근 모서리·그림자·테두리는 OS 가 그린다
         DataContext = settings;
         BuildThemeCards();
+        BuildPetCards();
+        UpdateCliCard();
+        _slime.CliStatusChanged += (_, _) => UpdateCliCard();
         UpdateRebindText();
         UpdateAimKeyText();
         UpdateWindKeyText();
@@ -89,12 +92,19 @@ public partial class SettingsWindow : Window
         {
             case nameof(AppSettings.Skin):
                 HighlightSelectedSkin();
+                HighlightPetCards();
                 UpdateBilliardSection();
                 UpdateCustomImageSection();
                 UpdateAutoMoveLock();
                 break;
             case nameof(AppSettings.InfiniteBounce):
                 UpdateInfiniteBounceLocks();
+                break;
+            case nameof(AppSettings.PetId):
+                HighlightPetCards();
+                break;
+            case nameof(AppSettings.CliLinkEnabled):
+                UpdateCliCard();
                 break;
             case nameof(AppSettings.AutoMove):
                 // 테마 변경·무한 튕기기로 밖에서 꺼진 경우 콤보 표시를 맞춘다.
@@ -428,8 +438,9 @@ public partial class SettingsWindow : Window
         HighlightSelectedSkin();
     }
 
-    private static UserControl MakeSkin(SlimeSkinKind kind) => kind switch
+    private UserControl MakeSkin(SlimeSkinKind kind) => kind switch
     {
+        SlimeSkinKind.Pet => MakePetPreview(),
         SlimeSkinKind.Billiard => new BilliardSkin(),
         SlimeSkinKind.Pokeball or SlimeSkinKind.Ultra or SlimeSkinKind.Master => new BallSkin(kind),
         SlimeSkinKind.Basketball => new BasketballSkin(),
@@ -510,7 +521,8 @@ public partial class SettingsWindow : Window
     // ── 테마별 커스텀 이미지 ────────────────────────────────
     /// <summary>현재 선택 테마 이름(설정창 표시용).</summary>
     private string CurrentThemeName()
-        => Skins.FirstOrDefault(s => s.kind == _settings.Skin).name ?? _settings.Skin.ToString();
+        => _settings.Skin == SlimeSkinKind.Pet ? CurrentPetName()
+        : (Skins.FirstOrDefault(s => s.kind == _settings.Skin).name ?? _settings.Skin.ToString());
 
     private void UpdateCustomImageSection()
     {

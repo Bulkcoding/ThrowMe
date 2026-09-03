@@ -30,6 +30,9 @@ public sealed class SlimeAnimationController
     /// <summary>true 면 찌그러짐/변형 없이 형태를 고정한다(당구공 등 단단한 스킨). 스핀 회전은 유지.</summary>
     public bool Rigid { get; set; }
 
+    /// <summary>true 면 스핀 회전을 그림에 반영하지 않는다(펫처럼 늘 바로 서 있어야 하는 스킨).</summary>
+    public bool Upright { get; set; }
+
     /// <summary>
     /// 자동 이동(꼬물꼬물) 중 형태를 직접 지정한다. null 이면 평소처럼 속도로 계산한다.
     ///
@@ -57,7 +60,7 @@ public sealed class SlimeAnimationController
     /// <summary>매 프레임 호출. 속도에 따른 Stretch 목표 설정 + 스프링 이완.</summary>
     public void Tick(double dt, Vector2 velocity, double spinAngleDeg)
     {
-        _spinAngle = spinAngleDeg;
+        _spinAngle = Upright ? 0 : spinAngleDeg;
 
         if (Rigid)
         {

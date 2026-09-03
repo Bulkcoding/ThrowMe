@@ -170,6 +170,7 @@ public partial class SlimeWindow : Window
         _relay?.Start();
 
         UpdateTipTimer(); // 사용법 힌트 순환 시작(설정이 켜져 있을 때만)
+        UpdateCliLink();  // Claude Code 상태 수신(펫 테마 동작용)
 
         // 무한 튕기기는 저장되므로, 켜 둔 채로 껐다 켜면 안내 없이 시작된다. 여기서 다시 띄운다.
         UpdateInfiniteBounceNotice();
@@ -583,6 +584,8 @@ public partial class SlimeWindow : Window
     {
         if (_animation != null)
             _animation.Rigid = _settings.Skin != SlimeSkinKind.Jelly; // 젤리만 말랑, 나머지는 단단
+        if (_animation != null)
+            _animation.Upright = _settings.Skin == SlimeSkinKind.Pet; // 펫은 스핀에 따라 돌지 않고 늘 바로 선다
 
         bool basketball = _settings.Skin == SlimeSkinKind.Basketball;
         bool paperPlane = _settings.Skin == SlimeSkinKind.PaperPlane;
@@ -1123,6 +1126,7 @@ public partial class SlimeWindow : Window
         if (_isDragging)
         {
             SetExpression(SlimeExpression.Normal);
+            (SkinHost.Content as PetSkin)?.SetMotion(0, 0);
             _physics.SpinAngle += _physics.AngularVelocity * dt; // 충전 중 시각 회전
             ApplyWindowPosition();
             _animation.Tick(dt, Vector2.Zero, _physics.SpinAngle);
@@ -1176,6 +1180,7 @@ public partial class SlimeWindow : Window
             now < _dizzyUntil ? SlimeExpression.Dizzy
             : _physics.Velocity.Length > _settings.ImpactReferenceSpeed * FlyingSpeedFraction ? SlimeExpression.Flying
             : SlimeExpression.Normal);
+        (SkinHost.Content as PetSkin)?.SetMotion(_physics.Velocity.X, _physics.Velocity.Length);
 
         // 날아가는 동안 미뤄 둔 설정 변경(스킨·크기)을 멈춘 순간 반영한다.
         if (_physics.IsAtRest) FlushDeferredSettings();
@@ -1345,6 +1350,12 @@ public partial class SlimeWindow : Window
                 ApplyAutoMove();
                 UpdateAutoMoveNotice();
                 break;
+            case nameof(AppSettings.PetId):
+                if (_settings.Skin == SlimeSkinKind.Pet) ApplySkinChange();
+                break;
+            case nameof(AppSettings.CliLinkEnabled):
+                UpdateCliLink();
+                break;
             case nameof(AppSettings.AutoMoveSpeed):
             case nameof(AppSettings.AutoMoveMonitor):
                 if (AutoMoveOn) EnsureRendering();
@@ -1411,6 +1422,7 @@ public partial class SlimeWindow : Window
             SlimeSkinKind.Basketball => new BasketballSkin(),
             SlimeSkinKind.Bowling => new BowlingSkin(),
             SlimeSkinKind.PaperPlane => new PaperPlaneSkin(),
+            SlimeSkinKind.Pet => MakePetSkin(),
             _ => new JellySkin(),
         };
         _expression = SlimeExpression.Normal; // 새 스킨은 기본 표정으로 시작
@@ -3411,6 +3423,7 @@ public partial class SlimeWindow : Window
         StopRendering();
         StopHandoffWatchdog();
         _tipTimer?.Stop();
+        _cli?.Stop();
         ToastWindow.CloseAll();
 
         // 방에 들어가 있으면 먼저 정상적으로 나간다(서버가 즉시 이탈로 처리 → 상대 목록에서 바로 사라지고

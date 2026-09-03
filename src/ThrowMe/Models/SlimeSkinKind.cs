@@ -26,4 +26,7 @@ public enum SlimeSkinKind
 
     /// <summary>종이비행기 — 접힌 면이 보이는 흰 종이비행기. 날아가는 물체 컨셉.</summary>
     PaperPlane = 7,
+
+    /// <summary>펫 — 가져온 Codex Pet 스프라이트시트(AppSettings.PetId). CLI 상태에 따라 동작이 바뀐다.</summary>
+    Pet = 8,
 }

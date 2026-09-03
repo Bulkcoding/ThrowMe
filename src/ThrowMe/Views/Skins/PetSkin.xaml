@@ -1,0 +1,13 @@
+<UserControl x:Class="ThrowMe.Views.Skins.PetSkin"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsHitTestVisible="True">
+    <!-- 다른 스킨과 같은 96×96 디자인 상자. 프레임(192×208)은 세로를 꽉 채우고 가로는 비율대로. -->
+    <Viewbox Stretch="Uniform">
+        <Grid Width="96" Height="96">
+            <Image x:Name="Frame" Stretch="Uniform"
+                   HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
+        </Grid>
+    </Viewbox>
+</UserControl>

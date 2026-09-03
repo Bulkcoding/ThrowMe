@@ -457,6 +457,18 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     public const double MinAutoMoveSpeed = 5.0, MaxAutoMoveSpeed = 120.0;
 
+    // ── 펫 테마 / CLI 연동 ──────────────────────────────────
+    /// <summary>펫 테마(<see cref="SlimeSkinKind.Pet"/>)에서 쓸 팩 id. 비어 있으면 첫 팩.</summary>
+    private string _petId = "";
+    public string PetId { get => _petId; set => Set(ref _petId, value ?? ""); }
+
+    /// <summary>Claude Code 훅이 보내는 상태를 받아 펫 동작에 반영한다(로컬 HTTP 수신).</summary>
+    private bool _cliLinkEnabled = true;
+    public bool CliLinkEnabled { get => _cliLinkEnabled; set => Set(ref _cliLinkEnabled, value); }
+
+    /// <summary>훅 수신 포트. clawd-on-desk(23333~23337)와 겹치지 않게 뗀다.</summary>
+    public const int CliLinkPort = 23433;
+
     /// <summary>
     /// 자동 이동을 가둘 모니터. 빈 문자열이면 전체 화면을 돌아다닌다.
     /// 값은 <c>"1920x1080@0,0"</c> 형태 — 장치 이름을 쓰지 않는 이유는 모니터 열거 코드를

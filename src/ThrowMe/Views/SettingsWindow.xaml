@@ -496,6 +496,41 @@
                                     </Grid>
                                 </StackPanel>
                             </Border>
+
+                            <!-- ── CLI 연동 ── -->
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                        <TextBlock Style="{StaticResource CardIcon}" Text="&#xE756;"/>
+                                        <TextBlock Style="{StaticResource CardTitle}" Text="CLI 연동 (Claude Code)"/>
+                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="상태 수신" Style="{StaticResource RowLabel}"/>
+                                                <TextBlock Style="{StaticResource InfoIcon}" ToolTip="Claude Code 훅이 보내는 이벤트를 이 PC 안(127.0.0.1)에서만 받습니다.&#10;펫 테마가 생각 중·작업 중·승인 대기·오류 동작으로 반응합니다."/>
+                                            </StackPanel>
+                                            <TextBlock Text="Claude Code 작업 상태를 펫 동작에 반영합니다." Style="{StaticResource RowDesc}"/>
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Center" IsChecked="{Binding CliLinkEnabled}"/>
+                                    </Grid>
+                                    <Border Style="{StaticResource RowDivider}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                                            <TextBlock Text="Claude Code 훅" Style="{StaticResource RowLabel}"/>
+                                            <TextBlock Style="{StaticResource RowDesc}" TextWrapping="Wrap"
+                                                       Text="사용자 설정(~/.claude/settings.json)에 상태 전송 훅을 넣습니다. 다른 도구의 훅은 건드리지 않으며, 처음 한 번 백업을 남깁니다. 열려 있는 Claude Code 는 다시 시작해야 반영됩니다."/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button x:Name="InstallHooksBtn" Style="{StaticResource OutlineButton}" MinWidth="110" Content="훅 등록" Click="OnInstallHooks"/>
+                                            <Button x:Name="UninstallHooksBtn" Style="{StaticResource GhostButton}" MinWidth="90" Margin="8,0,0,0" Content="훅 해제" Click="OnUninstallHooks"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock x:Name="CliStatusText" Style="{StaticResource RowDesc}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <!-- ══ 테마 ══ -->
@@ -515,6 +550,24 @@
                             </Border>
                             <TextBlock Text="슬라임 스킨을 고르세요. 카드를 눌러 미리보고 바로 적용됩니다." Style="{StaticResource RowDesc}" Margin="0,4,0,0"/>
                             <WrapPanel x:Name="ThemeCards" Margin="0,16,0,0"/>
+
+                            <!-- 펫 테마: Codex Pet zip 가져오기 + 가져온 펫 카드 -->
+                            <Border Style="{StaticResource Card}" Margin="0,18,0,0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                        <TextBlock Style="{StaticResource CardIcon}" Text="&#xE7F4;"/>
+                                        <TextBlock Text="펫 테마 (Codex Pet)" Style="{StaticResource CardTitle}"/>
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource RowDesc}" TextWrapping="Wrap"
+                                               Text="Codex Pet 형식의 zip(pet.json + 스프라이트시트)을 가져오면 테마로 추가됩니다. 펫은 Claude Code 작업 상태에 따라 생각·작업·승인 대기·실패 동작을 보여 줍니다(일반 → CLI 연동에서 훅을 등록하세요). 던지면 진행 방향으로 달립니다."/>
+                                    <WrapPanel x:Name="PetCards" Margin="0,12,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <Button Style="{StaticResource GhostButton}" Content="zip 가져오기" MinWidth="120" Height="36" Click="OnImportPet"/>
+                                        <TextBlock x:Name="PetEmptyText" Style="{StaticResource RowDesc}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                                   Text="가져온 펫이 없습니다."/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
 
                             <!-- 커스텀 이미지: 지원 테마(슬라임·당구공)를 고른 경우에만 표시 -->
                             <Border x:Name="CustomImageSection" Style="{StaticResource Card}"
