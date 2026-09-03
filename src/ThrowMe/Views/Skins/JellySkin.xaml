@@ -11,13 +11,7 @@
                  폭 80 = 96 상자에 좌우 8px 여백. 꽉 채우면 뻗은 자세의 꼬리 끝이 경계에 닿아
                  잘려 보인다(예전 벡터 몸통도 Margin 6, 지름 84 였다).
                  바닥선이 흔들리지 않도록 아래로 정렬한다. -->
-            <!-- 두 컷을 겹쳐 크로스페이드한다. 걸음이 넘어갈 때 앞 컷은 사라지고 뒤 컷이 떠올라
-                 즉시 교체의 뚝뚝 끊김이 사라진다. 위치·크기·정렬은 완전히 같아야 겹칠 때 흔들리지 않는다. -->
-            <Image x:Name="CrawlSpriteA" Visibility="Collapsed"
-                   Width="80" Stretch="Uniform" Margin="0,0,0,6"
-                   HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                   RenderOptions.BitmapScalingMode="HighQuality"/>
-            <Image x:Name="CrawlSpriteB" Visibility="Collapsed"
+            <Image x:Name="CrawlSprite" Visibility="Collapsed"
                    Width="80" Stretch="Uniform" Margin="0,0,0,6"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
                    RenderOptions.BitmapScalingMode="HighQuality"/>

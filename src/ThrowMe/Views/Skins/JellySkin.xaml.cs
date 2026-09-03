@@ -23,8 +23,7 @@ public partial class JellySkin : UserControl, ISkinExpressions, ISkinCrawl
     private static readonly Dictionary<string, BitmapImage> Cache = new(StringComparer.Ordinal);
 
     private bool _crawling;
-    private string? _shownA;
-    private string? _shownB;
+    private string? _shown;
 
     public JellySkin() => InitializeComponent();
 
@@ -51,24 +50,18 @@ public partial class JellySkin : UserControl, ISkinExpressions, ISkinCrawl
     public void SetCrawlPose(double t, bool faceRight)
     {
         string[] seq = faceRight ? Right : Left;
+        int i = (int)(Math.Clamp(t, 0, 0.9999) * seq.Length);
+        string name = seq[Math.Clamp(i, 0, seq.Length - 1)];
 
-        // 걸음 위상을 연속 인덱스로 본다. 정수부는 현재 컷, 소수부는 다음 컷으로 넘어간 정도.
-        // 두 컷을 그 비율로 겹쳐(크로스페이드) 즉시 교체의 뚝뚝 끊김을 없앤다.
-        double f = Math.Clamp(t, 0, 0.9999) * seq.Length;
-        int i = (int)f;
-        double frac = f - i;
-        string name0 = seq[Math.Clamp(i, 0, seq.Length - 1)];
-        string name1 = seq[(i + 1) % seq.Length];
-
-        if (name0 != _shownA) { CrawlSpriteA.Source = Frame(name0); _shownA = name0; }
-        if (name1 != _shownB) { CrawlSpriteB.Source = Frame(name1); _shownB = name1; }
-        CrawlSpriteA.Opacity = 1.0 - frac;
-        CrawlSpriteB.Opacity = frac;
+        if (name != _shown)
+        {
+            CrawlSprite.Source = Frame(name);
+            _shown = name;
+        }
 
         if (_crawling) return;
         _crawling = true;
-        CrawlSpriteA.Visibility = Visibility.Visible;
-        CrawlSpriteB.Visibility = Visibility.Visible;
+        CrawlSprite.Visibility = Visibility.Visible;
         BodyLayer.Visibility = Visibility.Collapsed;   // 코드로 그리던 몸통은 감춘다
         Face.Visibility = Visibility.Collapsed;        // 눈·볼터치는 그림에 이미 들어 있다
     }
@@ -77,10 +70,8 @@ public partial class JellySkin : UserControl, ISkinExpressions, ISkinCrawl
     {
         if (!_crawling) return;
         _crawling = false;
-        _shownA = null;
-        _shownB = null;
-        CrawlSpriteA.Visibility = Visibility.Collapsed;
-        CrawlSpriteB.Visibility = Visibility.Collapsed;
+        _shown = null;
+        CrawlSprite.Visibility = Visibility.Collapsed;
         BodyLayer.Visibility = Visibility.Visible;
         Face.Visibility = Visibility.Visible;
     }
