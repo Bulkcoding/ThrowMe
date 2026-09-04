@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using Color = System.Windows.Media.Color;
+using Orientation = System.Windows.Controls.Orientation;
 using ThrowMe.Models;
 using ThrowMe.Services;
 using ThrowMe.Views.Skins;
@@ -133,16 +136,91 @@ public partial class SlimeWindow
         MenuSessionsHeader.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (!on) return;
 
-        var entries = SessionMenuEntries();
-        MenuSessionsHeader.Header = entries.Count == 0 ? "Claude Code 세션 — 없음" : $"Claude Code 세션 ({entries.Count})";
+        var sessions = _cli?.Sessions ?? (IReadOnlyList<CliStateServer.SessionInfo>)Array.Empty<CliStateServer.SessionInfo>();
+        MenuSessionsHeader.Header = sessions.Count == 0 ? "Claude Code 세션 — 없음" : $"Claude Code 세션 ({sessions.Count})";
         int at = menu.Items.IndexOf(MenuSessionsHeader) + 1;
         var style = (Style)FindResource("DarkMenuItem");
-        foreach (var (text, folder) in entries)
+        foreach (var s in sessions)
         {
-            var item = new MenuItem { Header = "   " + text, Style = style, Tag = "session", IsEnabled = folder != null, ToolTip = folder };
-            string? f = folder;
-            item.Click += (_, _) => OpenFolder(f);
+            string folder = string.IsNullOrWhiteSpace(s.Cwd) ? "" : s.Cwd;
+            string name = folder.Length == 0
+                ? $"세션 {(s.Id.Length > 8 ? s.Id[..8] : s.Id)}"
+                : (Path.GetFileName(folder.TrimEnd('\\', '/')) is { Length: > 0 } n ? n : folder);
+            string? f = folder.Length > 0 ? folder : null;
+            var item = new MenuItem
+            {
+                Header = BuildSessionRow(name, s.State, s.LastSeen),
+                Style = style,
+                Tag = "session",
+                ToolTip = f,   // 작업 폴더 경로
+            };
+            item.Click += (_, _) => OpenFolder(f); // 클릭하면 작업 폴더를 연다
             menu.Items.Insert(at++, item);
         }
+    }
+
+    /// <summary>상태별 강조 색(아바타 점·배지 글자). 이미지의 색 배지 느낌.</summary>
+    private static Color StateColor(AgentState s) => s switch
+    {
+        AgentState.Working => Color.FromRgb(0x46, 0xC4, 0x6E),   // 초록: 작업 중
+        AgentState.Done => Color.FromRgb(0x5A, 0xD1, 0xA0),      // 민트: 완료
+        AgentState.Thinking => Color.FromRgb(0x7A, 0xA2, 0xF7),  // 파랑: 생각 중
+        AgentState.Juggling => Color.FromRgb(0xB4, 0x8E, 0xAD),  // 보라: 서브에이전트
+        AgentState.Waiting => Color.FromRgb(0xE5, 0xB5, 0x67),   // 노랑: 승인 대기
+        AgentState.Error => Color.FromRgb(0xE5, 0x48, 0x4D),     // 빨강: 오류
+        _ => Color.FromRgb(0x8A, 0x8F, 0x98),                    // 회색: 대기
+    };
+
+    /// <summary>세션 한 줄을 아바타 점 + 이름 + 상태 색 배지 + 경과 시간으로 그린다.</summary>
+    private static FrameworkElement BuildSessionRow(string name, AgentState state, DateTime lastSeen)
+    {
+        Color c = StateColor(state);
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        panel.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 9,
+            Height = 9,
+            Fill = new SolidColorBrush(c),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = name,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xE6, 0xE8, 0xEC)),
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 170,
+        });
+
+        panel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(0x2E, c.R, c.G, c.B)),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(7, 1, 7, 2),
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = StateLabel(state),
+                Foreground = new SolidColorBrush(c),
+                FontSize = 10.5,
+                FontWeight = FontWeights.Medium,
+            },
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = Ago(lastSeen),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8F, 0x98)),
+            FontSize = 10.5,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+        });
+
+        return panel;
     }
 }
