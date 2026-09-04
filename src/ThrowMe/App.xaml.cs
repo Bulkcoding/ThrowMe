@@ -57,6 +57,17 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Claude Code 훅 중계: `--hook <event> <port>` 로 실행되면 stdin 이벤트에 터미널 창 핸들을
+        // 붙여 로컬 서버로 넘기고 즉시 종료한다(앱을 띄우지 않는다). 세션 클릭 시 그 창을 포커스하려는 것.
+        if (e.Args.Length >= 1 && e.Args[0] == "--hook")
+        {
+            string ev = e.Args.Length > 1 ? e.Args[1] : "";
+            int port = e.Args.Length > 2 && int.TryParse(e.Args[2], out int p) ? p : AppSettings.CliLinkPort;
+            try { HookRelay.Run(ev, port); } catch { }
+            Shutdown();
+            return;
+        }
+
         // 오프라인 미리보기: `--render-preview <출력폴더>` 로 실행하면 스킨/골대를 PNG로 저장하고 종료.
         if (e.Args.Length >= 2 && e.Args[0] == "--render-preview")
         {

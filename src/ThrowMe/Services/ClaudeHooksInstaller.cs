@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -27,8 +28,21 @@ public static class ClaudeHooksInstaller
 
     private static string Marker(int port) => $"127.0.0.1:{port}/state";
 
-    public static string CommandFor(string ev, int port) =>
-        $"curl.exe -s -m 2 -X POST \"http://127.0.0.1:{port}/state?event={ev}\" -H \"Content-Type: application/json\" --data-binary @-";
+    /// <summary>창 핸들까지 붙여 보내야 하는(드문) 이벤트 — 세션과 터미널 창을 잇는 데 쓴다.</summary>
+    private static readonly HashSet<string> WindowEvents = new(StringComparer.Ordinal) { "SessionStart", "UserPromptSubmit" };
+
+    public static string CommandFor(string ev, int port)
+    {
+        // 세션 시작·프롬프트 제출만 우리 exe(--hook)로 받아 터미널 창 핸들을 함께 보낸다.
+        // 창은 세션당 한 번 잡으면 되므로 빈번한 상태 이벤트는 가벼운 curl 로 그대로 둔다.
+        if (WindowEvents.Contains(ev))
+        {
+            string exe = Process.GetCurrentProcess().MainModule?.FileName ?? "";
+            if (exe.Length > 0)
+                return $"\"{exe}\" --hook {ev} {port}";
+        }
+        return $"curl.exe -s -m 2 -X POST \"http://127.0.0.1:{port}/state?event={ev}\" -H \"Content-Type: application/json\" --data-binary @-";
+    }
 
     /// <summary>우리 훅이 하나라도 들어 있는가.</summary>
     public static bool IsInstalled(int port)

@@ -29,10 +29,11 @@ public sealed class CliStateServer
         public DateTime LastSeen;
         public DateTime StateSince;
         public string Cwd = "";
+        public long Hwnd;   // 세션이 도는 터미널 창 핸들(0 = 모름). --hook 이벤트가 채운다.
     }
 
     /// <summary>세션 표시용 스냅샷.</summary>
-    public sealed record SessionInfo(string Id, AgentState State, string Cwd, DateTime LastSeen);
+    public sealed record SessionInfo(string Id, AgentState State, string Cwd, DateTime LastSeen, long Hwnd);
 
     private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(10);
     /// <summary>턴 완료(Done) 표시를 유지하는 시간. 지나면 Idle.</summary>
@@ -77,7 +78,7 @@ public sealed class CliStateServer
             return _sessions
                 .Where(kv => kv.Value.LastSeen >= cutoff)
                 .OrderByDescending(kv => kv.Value.LastSeen)
-                .Select(kv => new SessionInfo(kv.Key, kv.Value.State, kv.Value.Cwd, kv.Value.LastSeen))
+                .Select(kv => new SessionInfo(kv.Key, kv.Value.State, kv.Value.Cwd, kv.Value.LastSeen, kv.Value.Hwnd))
                 .ToList();
         }
     }
@@ -141,7 +142,8 @@ public sealed class CliStateServer
                 using (var sr = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
                     body = sr.ReadToEnd();
                 string ev = req.QueryString["event"] ?? "";
-                Apply(ev, body);
+                long.TryParse(req.QueryString["hwnd"], out long hwnd);
+                Apply(ev, body, hwnd);
                 ctx.Response.StatusCode = 204;
             }
             else if (req.HttpMethod == "GET" && req.Url?.AbsolutePath == "/health")
@@ -165,7 +167,7 @@ public sealed class CliStateServer
         }
     }
 
-    private void Apply(string ev, string body)
+    private void Apply(string ev, string body, long hwnd = 0)
     {
         string sid = "default";
         string toolName = "", notificationType = "", cwd = "";
@@ -204,6 +206,7 @@ public sealed class CliStateServer
             var s = _sessions.GetOrAdd(sid, _ => new Session { StateSince = now });
             s.LastSeen = now;
             if (cwd.Length > 0) s.Cwd = cwd;
+            if (hwnd != 0) s.Hwnd = hwnd;   // --hook 이 붙여 준 터미널 창 핸들(세션당 한 번 잡히면 유지)
             var before = s.State;
             switch (ev)
             {

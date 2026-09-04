@@ -1,11 +1,13 @@
 using UserControl = System.Windows.Controls.UserControl;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Color = System.Windows.Media.Color;
 using Orientation = System.Windows.Controls.Orientation;
+using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using ThrowMe.Models;
 using ThrowMe.Services;
 using ThrowMe.Views.Skins;
@@ -147,17 +149,42 @@ public partial class SlimeWindow
                 ? $"세션 {(s.Id.Length > 8 ? s.Id[..8] : s.Id)}"
                 : (Path.GetFileName(folder.TrimEnd('\\', '/')) is { Length: > 0 } n ? n : folder);
             string? f = folder.Length > 0 ? folder : null;
+            long hwnd = s.Hwnd;
             var item = new MenuItem
             {
                 Header = BuildSessionRow(name, s.State, s.LastSeen),
                 Style = style,
                 Tag = "session",
-                ToolTip = f,   // 작업 폴더 경로
+                ToolTip = hwnd != 0 ? "클릭하면 이 세션의 터미널 창을 앞으로 가져옵니다" : f,
             };
-            item.Click += (_, _) => OpenFolder(f); // 클릭하면 작업 폴더를 연다
+            item.Click += (_, _) => ActivateSession(hwnd, f); // 그 CLI 창을 앞으로(없으면 작업 폴더 열기)
             menu.Items.Insert(at++, item);
         }
     }
+
+    /// <summary>세션의 터미널 창을 앞으로 가져온다. 창 핸들이 없거나 실패하면 작업 폴더를 연다.</summary>
+    private static void ActivateSession(long hwnd, string? folder)
+    {
+        if (hwnd != 0 && TryFocusWindow((IntPtr)hwnd)) return;
+        OpenFolder(folder);
+    }
+
+    private static bool TryFocusWindow(IntPtr h)
+    {
+        try
+        {
+            if (!IsWindow(h)) return false;
+            if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+            return SetForegroundWindow(h);
+        }
+        catch { return false; }
+    }
+
+    private const int SW_RESTORE = 9;
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hWnd);
 
     /// <summary>상태별 강조 색(아바타 점·배지 글자). 이미지의 색 배지 느낌.</summary>
     private static Color StateColor(AgentState s) => s switch
@@ -171,37 +198,49 @@ public partial class SlimeWindow
         _ => Color.FromRgb(0x8A, 0x8F, 0x98),                    // 회색: 대기
     };
 
-    /// <summary>세션 한 줄을 아바타 점 + 이름 + 상태 색 배지 + 경과 시간으로 그린다.</summary>
+    /// <summary>세션 한 줄을 원형 아바타 + 이름 + 상태 색 배지 + 경과 시간으로 그린다(Clawd 세션 목록 느낌).</summary>
     private static FrameworkElement BuildSessionRow(string name, AgentState state, DateTime lastSeen)
     {
         Color c = StateColor(state);
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
-        panel.Children.Add(new System.Windows.Shapes.Ellipse
+        // 원형 아바타: 상태색 링 안에 상태색 점.
+        row.Children.Add(new Border
         {
-            Width = 9,
-            Height = 9,
-            Fill = new SolidColorBrush(c),
+            Width = 18,
+            Height = 18,
+            CornerRadius = new CornerRadius(9),
+            Background = new SolidColorBrush(Color.FromArgb(0x33, c.R, c.G, c.B)),
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
+            Margin = new Thickness(0, 0, 9, 0),
+            Child = new System.Windows.Shapes.Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Fill = new SolidColorBrush(c),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
         });
 
-        panel.Children.Add(new TextBlock
+        row.Children.Add(new TextBlock
         {
             Text = name,
             Foreground = new SolidColorBrush(Color.FromRgb(0xE6, 0xE8, 0xEC)),
             VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 12,
+            FontSize = 12.5,
+            FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 170,
+            MaxWidth = 160,
         });
 
-        panel.Children.Add(new Border
+        // 상태 배지(둥근 pill): 상태색 흐린 배경 + 상태색 글자.
+        row.Children.Add(new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0x2E, c.R, c.G, c.B)),
-            CornerRadius = new CornerRadius(7),
-            Padding = new Thickness(7, 1, 7, 2),
-            Margin = new Thickness(10, 0, 0, 0),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8, 1, 8, 2),
+            Margin = new Thickness(9, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {
@@ -212,15 +251,15 @@ public partial class SlimeWindow
             },
         });
 
-        panel.Children.Add(new TextBlock
+        row.Children.Add(new TextBlock
         {
             Text = Ago(lastSeen),
             Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8F, 0x98)),
             FontSize = 10.5,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(10, 0, 0, 0),
         });
 
-        return panel;
+        return row;
     }
 }
