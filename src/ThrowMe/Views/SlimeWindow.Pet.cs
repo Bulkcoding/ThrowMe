@@ -45,18 +45,17 @@ public partial class SlimeWindow
             }
             _cli.Start();
 
-            // 이미 우리 훅을 쓰고 있으면 최신 형식으로 갱신한다 — 세션 시작 훅이 --hook(창 핸들 수집)으로
-            // 바뀌었어도 사용자가 설정에서 껐다 켜지 않아도 되도록.
-            try
-            {
-                if (ClaudeHooksInstaller.IsInstalled(AppSettings.CliLinkPort))
-                    ClaudeHooksInstaller.Install(AppSettings.CliLinkPort, out _);
-            }
-            catch (Exception ex) { Logger.Error("Hook refresh on start failed.", ex); }
+            // 수신을 켜면 Claude Code 훅을 자동 등록한다(이미 있으면 최신 형식으로 갱신).
+            // 사용자가 훅을 따로 등록할 필요 없이 수신 토글 하나로 켜고 끈다.
+            try { ClaudeHooksInstaller.Install(AppSettings.CliLinkPort, out _); }
+            catch (Exception ex) { Logger.Error("Auto-install hooks failed.", ex); }
         }
         else
         {
             _cli?.Stop();
+            // 수신을 끄면 우리 훅도 자동으로 뺀다.
+            try { ClaudeHooksInstaller.Uninstall(AppSettings.CliLinkPort, out _); }
+            catch (Exception ex) { Logger.Error("Auto-uninstall hooks failed.", ex); }
             OnAgentState(AgentState.Idle);
         }
         CliStatusChanged?.Invoke(this, EventArgs.Empty);

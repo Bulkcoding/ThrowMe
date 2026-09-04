@@ -515,8 +515,9 @@
                                         </StackPanel>
                                         <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Center" IsChecked="{Binding CliLinkEnabled}"/>
                                     </Grid>
-                                    <Border Style="{StaticResource RowDivider}"/>
-                                    <Grid>
+                                    <!-- 훅은 상태 수신 토글에 묶여 자동 등록·해제된다(버튼 노출 안 함). -->
+                                    <Border Style="{StaticResource RowDivider}" Visibility="Collapsed"/>
+                                    <Grid Visibility="Collapsed">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
                                             <TextBlock Text="Claude Code 훅" Style="{StaticResource RowLabel}"/>
@@ -559,7 +560,7 @@
                                         <TextBlock Text="펫 테마 (Codex Pet)" Style="{StaticResource CardTitle}"/>
                                     </StackPanel>
                                     <TextBlock Style="{StaticResource RowDesc}" TextWrapping="Wrap"
-                                               Text="Codex Pet 형식의 zip(pet.json + 스프라이트시트)을 가져오면 테마로 추가됩니다. 펫은 Claude Code 작업 상태에 따라 생각·작업·승인 대기·실패 동작을 보여 줍니다(일반 → CLI 연동에서 훅을 등록하세요). 던지면 진행 방향으로 달립니다."/>
+                                               Text="Codex Pet 형식의 zip(pet.json + 스프라이트시트)을 가져오면 테마로 추가됩니다. 펫은 Claude Code 작업 상태에 따라 생각·작업·승인 대기·실패 동작을 보여 줍니다(일반 → CLI 연동에서 상태 수신을 켜세요). 던지면 진행 방향으로 달립니다."/>
                                     <WrapPanel x:Name="PetCards" Margin="0,12,0,0"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                         <Button Style="{StaticResource GhostButton}" Content="zip 가져오기" MinWidth="120" Height="36" Click="OnImportPet"/>

@@ -157,16 +157,15 @@ public partial class SettingsWindow
     private void UpdateCliCard()
     {
         int port = AppSettings.CliLinkPort;
-        bool installed = ClaudeHooksInstaller.IsInstalled(port);
-        InstallHooksBtn.Content = installed ? "훅 다시 등록" : "훅 등록";
-        UninstallHooksBtn.IsEnabled = installed;
+        // 훅은 수신 토글에 묶여 자동 등록·해제되므로 버튼을 노출하지 않는다.
+        InstallHooksBtn.Visibility = Visibility.Collapsed;
+        UninstallHooksBtn.Visibility = Visibility.Collapsed;
 
         string server = !_settings.CliLinkEnabled ? "수신 꺼짐"
             : _slime.CliServerRunning ? $"수신 중 (포트 {port})"
             : $"수신 실패: {_slime.CliLastError ?? "알 수 없음"}";
-        string hooks = installed ? "훅 등록됨" : "훅 미등록 — 등록 버튼을 누르세요";
         string state = _settings.CliLinkEnabled ? $"현재 상태: {StateText(_slime.CurrentAgentState)} · 세션 {_slime.CliSessionCount}개" : "";
-        CliStatusText.Text = string.Join("   ·   ", new[] { server, hooks, state }.Where(s => s.Length > 0));
+        CliStatusText.Text = string.Join("   ·   ", new[] { server, state }.Where(s => s.Length > 0));
     }
 
     private static string StateText(AgentState s) => SlimeWindow.StateLabel(s);
