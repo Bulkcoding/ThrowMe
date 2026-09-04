@@ -46,6 +46,13 @@ public sealed class CliStateServer
     private HttpListener? _listener;
     private System.Threading.Timer? _tick;
     private AgentState _last = AgentState.Idle;
+    private volatile bool _dirty;   // 마지막 저장 이후 세션이 바뀌었는가
+
+    /// <summary>재시작해도 진행 중이던 세션을 바로 다시 보여 주려고 상태를 이 파일에 캐시한다.</summary>
+    private static string PersistPath => Path.Combine(AppPaths.Roaming, "cli_sessions.json");
+
+    /// <summary>디스크 저장용 세션 스냅샷(시각은 UTC ticks).</summary>
+    private sealed record Snap(string Id, int State, int Subagents, long LastSeenTicks, long StateSinceTicks, string Cwd, long Hwnd);
 
     public bool IsRunning { get; private set; }
     public string? LastError { get; private set; }
@@ -95,8 +102,9 @@ public sealed class CliStateServer
             IsRunning = true;
             LastError = null;
             _ = Task.Run(() => Loop(l));
-            // Done → Idle 내려가기, 오래된 세션 정리는 이벤트가 없어도 일어나야 하므로 주기적으로 다시 계산한다.
-            _tick = new System.Threading.Timer(_ => { try { Recompute(); } catch { } }, null, 1000, 1000);
+            LoadSnapshot(); // 재시작 전 진행 중이던 세션을 바로 되살린다
+            // Done → Idle 내려가기, 오래된 세션 정리, 스냅샷 저장은 이벤트가 없어도 일어나야 하므로 주기적으로 한다.
+            _tick = new System.Threading.Timer(_ => { try { Recompute(); if (_dirty) SaveSnapshot(); } catch { } }, null, 1000, 1000);
             Logger.Info($"CLI state server listening on 127.0.0.1:{_port}.");
         }
         catch (Exception ex)
@@ -240,6 +248,7 @@ public sealed class CliStateServer
         }
 
         Recompute();
+        _dirty = true;
         Logger.Info($"CLI event {ev} sid={Short(sid)} tool={toolName} hwnd={hwnd} -> shown={_last}, sessions={SessionCount}");
         SessionsChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -274,7 +283,7 @@ public sealed class CliStateServer
 
         var shown = attention != AgentState.Idle ? attention : (latest?.State ?? AgentState.Idle);
         SetAggregate(shown);
-        if (changedSessions) SessionsChanged?.Invoke(this, EventArgs.Empty);
+        if (changedSessions) { _dirty = true; SessionsChanged?.Invoke(this, EventArgs.Empty); }
     }
 
     private void SetAggregate(AgentState s)
@@ -282,5 +291,58 @@ public sealed class CliStateServer
         if (s == _last) return;
         _last = s;
         StateChanged?.Invoke(this, s);
+    }
+
+    /// <summary>현재 세션들을 디스크에 저장한다(재시작 복원용).</summary>
+    private void SaveSnapshot()
+    {
+        try
+        {
+            _dirty = false;
+            var list = _sessions.Select(kv => new Snap(
+                kv.Key, (int)kv.Value.State, kv.Value.Subagents,
+                kv.Value.LastSeen.Ticks, kv.Value.StateSince.Ticks, kv.Value.Cwd, kv.Value.Hwnd)).ToList();
+
+            Directory.CreateDirectory(AppPaths.Roaming);
+            string tmp = PersistPath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(list));
+            File.Move(tmp, PersistPath, overwrite: true);
+        }
+        catch (Exception ex) { Logger.Error("Save CLI sessions failed.", ex); }
+    }
+
+    /// <summary>저장해 둔 세션 중 아직 살아 있을(TTL 안) 것만 되살린다. 창 핸들·폴더도 함께 복원한다.</summary>
+    private void LoadSnapshot()
+    {
+        try
+        {
+            if (!File.Exists(PersistPath)) return;
+            var list = JsonSerializer.Deserialize<List<Snap>>(File.ReadAllText(PersistPath));
+            if (list == null || list.Count == 0) return;
+
+            var now = DateTime.UtcNow;
+            int restored = 0;
+            foreach (var s in list)
+            {
+                var lastSeen = new DateTime(s.LastSeenTicks, DateTimeKind.Utc);
+                if (now - lastSeen >= SessionTtl) continue; // 너무 오래된 세션은 되살리지 않는다
+                _sessions[s.Id] = new Session
+                {
+                    State = (AgentState)s.State,
+                    Subagents = s.Subagents,
+                    LastSeen = lastSeen,
+                    StateSince = new DateTime(s.StateSinceTicks, DateTimeKind.Utc),
+                    Cwd = s.Cwd ?? "",
+                    Hwnd = s.Hwnd,
+                };
+                restored++;
+            }
+
+            if (restored == 0) return;
+            Recompute();
+            SessionsChanged?.Invoke(this, EventArgs.Empty);
+            Logger.Info($"Restored {restored} CLI session(s) from cache.");
+        }
+        catch (Exception ex) { Logger.Error("Load CLI sessions failed.", ex); }
     }
 }
