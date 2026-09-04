@@ -439,25 +439,6 @@
                                             </Grid>
                                         </StackPanel>
                                     </Border>
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                                <TextBlock Style="{StaticResource CardIcon}" Text="&#xE72C;"/>
-                                                <TextBlock Style="{StaticResource CardTitle}" Text="업데이트"/>
-                                            </StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <TextBlock x:Name="UpdateInfoText" Grid.Column="0" Style="{StaticResource RowDesc}"
-                                                           VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="Wrap"
-                                                           Text="앱을 켤 때 새 버전이 있으면 자동으로 받아 적용하고 다시 시작합니다."/>
-                                                <Button Grid.Column="1" Style="{StaticResource OutlineButton}"
-                                                        VerticalAlignment="Center" Click="OnGoToNotes">
-                                                    <TextBlock Text="업데이트 노트 보기"/>
-                                                </Button>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
                                 </StackPanel>
                             </Grid>
 
@@ -530,6 +511,26 @@
                                         </StackPanel>
                                     </Grid>
                                     <TextBlock x:Name="CliStatusText" Style="{StaticResource RowDesc}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- ── 업데이트(전체 폭) ── -->
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                        <TextBlock Style="{StaticResource CardIcon}" Text="&#xE72C;"/>
+                                        <TextBlock Style="{StaticResource CardTitle}" Text="업데이트"/>
+                                    </StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="UpdateInfoText" Grid.Column="0" Style="{StaticResource RowDesc}"
+                                                   VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="Wrap"
+                                                   Text="앱을 켤 때 새 버전이 있으면 자동으로 받아 적용하고 다시 시작합니다."/>
+                                        <Button Grid.Column="1" Style="{StaticResource OutlineButton}"
+                                                VerticalAlignment="Center" Click="OnGoToNotes">
+                                            <TextBlock Text="업데이트 노트 보기"/>
+                                        </Button>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
