@@ -405,9 +405,17 @@ public partial class SlimeWindow : Window
     /// <summary>SlimeVisible 에 맞춰 부수 창들까지 함께 감춘다(숨기기가 "완전히" 사라지게).</summary>
     private void ApplyVisibility()
     {
+        if (_shuttingDown) return;
         bool show = _settings.SlimeVisible;
-        if (show && _ownsBall) Show();
-        else if (!show) Hide();
+        if (show && _ownsBall)
+        {
+            try { Show(); }
+            catch (Exception ex) { Logger.Error("SlimeWindow.Show failed (window closed?).", ex); }
+        }
+        else if (!show)
+        {
+            try { Hide(); } catch { }
+        }
 
         // 테마가 띄운 것은 전부 함께 감춘다(규칙 §3.6) — 슬라임만 사라지면 숨긴 티가 남는다.
         // Close() 가 아니라 Hide() 로만 감춰서, 다시 보이기 하면 직전 상태 그대로 복원된다.
@@ -3418,6 +3426,23 @@ public partial class SlimeWindow : Window
     // ── 정리 ────────────────────────────────────────────────
     /// <summary>종료 절차가 시작됐는가. 늦게 도착한 릴레이 콜백이 닫힌 창을 건드리지 않게 한다.</summary>
     private bool _shuttingDown;
+
+    /// <summary>
+    /// 종료가 아닌데 창이 닫히려 하면(Alt+F4·외부 Close 등) 닫지 않고 숨긴다.
+    /// 그래야 트레이에서 다시 보이기를 눌렀을 때, 이미 닫힌 창에 Show() 를 호출해
+    /// 예외가 나는 일을 원천 차단한다. 앱 종료 시에는 _shuttingDown 이 켜져 정상적으로 닫힌다.
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_shuttingDown)
+        {
+            e.Cancel = true;
+            Hide();
+            Logger.Info("SlimeWindow close intercepted -> hidden (app not shutting down).");
+            return;
+        }
+        base.OnClosing(e);
+    }
 
     public void ShutdownCleanup()
     {
