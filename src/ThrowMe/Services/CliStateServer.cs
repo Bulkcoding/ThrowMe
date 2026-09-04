@@ -240,7 +240,7 @@ public sealed class CliStateServer
         }
 
         Recompute();
-        Logger.Info($"CLI event {ev} sid={Short(sid)} tool={toolName} -> shown={_last}, sessions={SessionCount}");
+        Logger.Info($"CLI event {ev} sid={Short(sid)} tool={toolName} hwnd={hwnd} -> shown={_last}, sessions={SessionCount}");
         SessionsChanged?.Invoke(this, EventArgs.Empty);
     }
 

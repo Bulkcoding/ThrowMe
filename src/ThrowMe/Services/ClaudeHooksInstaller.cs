@@ -169,7 +169,10 @@ public static class ClaudeHooksInstaller
     {
         if (entry is not JsonObject o || o["hooks"] is not JsonArray inner) return false;
         foreach (var h in inner)
-            if (h is JsonObject ho && ho["command"]?.GetValue<string>() is string cmd && cmd.Contains(Marker(port), StringComparison.Ordinal))
+            if (h is JsonObject ho && ho["command"]?.GetValue<string>() is string cmd
+                // curl 훅(마커) 또는 우리 exe 의 --hook 훅(포트 포함) 둘 다 우리 것으로 본다.
+                && (cmd.Contains(Marker(port), StringComparison.Ordinal)
+                    || (cmd.Contains("--hook", StringComparison.Ordinal) && cmd.Contains(port.ToString(), StringComparison.Ordinal))))
                 return true;
         return false;
     }

@@ -44,6 +44,15 @@ public partial class SlimeWindow
                 _cli.SessionsChanged += (_, _) => Dispatcher.BeginInvoke(() => CliStatusChanged?.Invoke(this, EventArgs.Empty));
             }
             _cli.Start();
+
+            // 이미 우리 훅을 쓰고 있으면 최신 형식으로 갱신한다 — 세션 시작 훅이 --hook(창 핸들 수집)으로
+            // 바뀌었어도 사용자가 설정에서 껐다 켜지 않아도 되도록.
+            try
+            {
+                if (ClaudeHooksInstaller.IsInstalled(AppSettings.CliLinkPort))
+                    ClaudeHooksInstaller.Install(AppSettings.CliLinkPort, out _);
+            }
+            catch (Exception ex) { Logger.Error("Hook refresh on start failed.", ex); }
         }
         else
         {
@@ -162,29 +171,52 @@ public partial class SlimeWindow
         }
     }
 
-    /// <summary>세션의 터미널 창을 앞으로 가져온다. 창 핸들이 없거나 실패하면 작업 폴더를 연다.</summary>
+    /// <summary>세션의 터미널 창을 앞으로 가져온다. 창 핸들이 없거나 이미 닫혔으면 작업 폴더를 연다.</summary>
     private static void ActivateSession(long hwnd, string? folder)
     {
-        if (hwnd != 0 && TryFocusWindow((IntPtr)hwnd)) return;
+        // 창 핸들이 유효하면 그 터미널을 포커스한다. 포커스가 잠깐 거부돼도 폴더로 새지 않는다.
+        if (hwnd != 0 && IsWindow((IntPtr)hwnd)) { ForceForeground((IntPtr)hwnd); return; }
         OpenFolder(folder);
     }
 
-    private static bool TryFocusWindow(IntPtr h)
+    /// <summary>다른 프로세스 창을 앞으로 가져온다. 포그라운드 훔치기 제약을 우회한다.</summary>
+    private static void ForceForeground(IntPtr h)
     {
         try
         {
-            if (!IsWindow(h)) return false;
-            if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
-            return SetForegroundWindow(h);
+            ShowWindow(h, IsIconic(h) ? SW_RESTORE : SW_SHOW);
+            if (SetForegroundWindow(h)) { BringWindowToTop(h); return; }
+
+            // 거부되면 현재 포그라운드 스레드에 잠깐 입력을 붙여 다시 시도한다.
+            IntPtr fg = GetForegroundWindow();
+            uint fgThread = GetWindowThreadProcessId(fg, out _);
+            uint myThread = GetCurrentThreadId();
+            if (fgThread != 0 && fgThread != myThread && AttachThreadInput(myThread, fgThread, true))
+            {
+                SetForegroundWindow(h);
+                BringWindowToTop(h);
+                AttachThreadInput(myThread, fgThread, false);
+            }
+            else
+            {
+                SetForegroundWindow(h);
+                BringWindowToTop(h);
+            }
         }
-        catch { return false; }
+        catch { }
     }
 
     private const int SW_RESTORE = 9;
+    private const int SW_SHOW = 5;
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+    [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
 
     /// <summary>상태별 강조 색(아바타 점·배지 글자). 이미지의 색 배지 느낌.</summary>
     private static Color StateColor(AgentState s) => s switch
