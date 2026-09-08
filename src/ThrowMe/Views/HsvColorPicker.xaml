@@ -1,0 +1,60 @@
+<UserControl x:Class="ThrowMe.Views.HsvColorPicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="232">
+    <StackPanel>
+        <!-- 채도(가로)·밝기(세로) 사각형. 바탕은 흰→현재 색상, 위에 투명→검정을 덧씌운다. -->
+        <Border x:Name="SvBox" Width="216" Height="160" CornerRadius="6" Cursor="Cross"
+                MouseLeftButtonDown="OnSvDown" MouseMove="OnSvMove" MouseLeftButtonUp="OnSvUp">
+            <Grid>
+                <Rectangle x:Name="SvHue" RadiusX="6" RadiusY="6"/>
+                <Rectangle RadiusX="6" RadiusY="6">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#00000000" Offset="0"/>
+                            <GradientStop Color="#FF000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+                <Canvas>
+                    <Ellipse x:Name="SvMarker" Width="12" Height="12" Stroke="White" StrokeThickness="2"
+                             Fill="Transparent" IsHitTestVisible="False"/>
+                </Canvas>
+            </Grid>
+        </Border>
+
+        <!-- 색상(0~360) 슬라이더. 트랙 뒤에 무지개 띠를 깐다. -->
+        <Grid Margin="0,10,0,0" Height="22">
+            <Border CornerRadius="4" Height="8" VerticalAlignment="Center" Margin="6,0">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#FF0000" Offset="0"/>
+                        <GradientStop Color="#FFFF00" Offset="0.167"/>
+                        <GradientStop Color="#00FF00" Offset="0.333"/>
+                        <GradientStop Color="#00FFFF" Offset="0.5"/>
+                        <GradientStop Color="#0000FF" Offset="0.667"/>
+                        <GradientStop Color="#FF00FF" Offset="0.833"/>
+                        <GradientStop Color="#FF0000" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+            </Border>
+            <Slider x:Name="HueSlider" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="360"
+                    Value="0" ValueChanged="OnHueChanged" Background="Transparent"/>
+        </Grid>
+
+        <!-- 미리보기 + 16진 입력 -->
+        <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="36"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="Preview" Grid.Column="0" Width="30" Height="30" CornerRadius="15"
+                    BorderBrush="#66FFFFFF" BorderThickness="1"/>
+            <TextBox x:Name="HexBox" Grid.Column="1" Style="{StaticResource DarkTextBox}" Height="30"
+                     VerticalContentAlignment="Center" Text="#1C1C22"
+                     KeyDown="OnHexKeyDown" LostFocus="OnHexLostFocus"/>
+        </Grid>
+        <TextBlock Text="사각형에서 채도·밝기, 띠에서 색상을 고르거나 #RRGGBB 를 입력하세요."
+                   Style="{StaticResource RowDesc}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+    </StackPanel>
+</UserControl>

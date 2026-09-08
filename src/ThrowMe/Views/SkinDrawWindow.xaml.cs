@@ -13,6 +13,9 @@ using Cursors = System.Windows.Input.Cursors;
 using MessageBox = System.Windows.MessageBox;
 using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using Size = System.Windows.Size;
+using Image = System.Windows.Controls.Image;
+using Button = System.Windows.Controls.Button;
+using VerticalAlignment = System.Windows.VerticalAlignment;
 
 namespace ThrowMe.Views;
 
@@ -28,41 +31,64 @@ public partial class SkinDrawWindow : Window
     /// <summary>저장 해상도(정사각). 공은 최대 180px 이라 이 정도면 충분히 선명하다.</summary>
     private const int OutputSize = 512;
 
-    private static readonly Color[] PaletteColors =
+    private static readonly Color[] PaletteColors = Hex(
+        // 회색조 6
+        "000000", "333333", "666666", "999999", "CCCCCC", "FFFFFF",
+        // 선명 9
+        "E53935", "FB8C00", "FDD835", "43A047", "00ACC1", "1E88E5", "8E24AA", "EC407A", "795548",
+        // 밝은 9
+        "EF9A9A", "FFCC80", "FFF59D", "A5D6A7", "80DEEA", "90CAF9", "CE93D8", "F8BBD0", "BCAAA4",
+        // 어두운 9
+        "B71C1C", "E65100", "F9A825", "1B5E20", "006064", "0D47A1", "4A148C", "880E4F", "3E2723",
+        // 보조 3
+        "FF5722", "CDDC39", "607D8B");
+
+    private static Color[] Hex(params string[] hex) => hex.Select(ParseHex).ToArray();
+
+    private static Color ParseHex(string h)
     {
-        Color.FromRgb(0x1C, 0x1C, 0x22), // 먹
-        Color.FromRgb(0xFF, 0xFF, 0xFF), // 흰
-        Color.FromRgb(0xE8, 0x3D, 0x3D), // 빨강
-        Color.FromRgb(0xF2, 0x92, 0x1F), // 주황
-        Color.FromRgb(0xF5, 0xD3, 0x2B), // 노랑
-        Color.FromRgb(0x4E, 0xD1, 0x7A), // 초록
-        Color.FromRgb(0x33, 0xC2, 0xD6), // 청록
-        Color.FromRgb(0x3D, 0x7B, 0xE8), // 파랑
-        Color.FromRgb(0x8B, 0x6F, 0xD6), // 보라
-        Color.FromRgb(0xFF, 0x9E, 0xC4), // 분홍
-    };
+        int v = int.Parse(h, System.Globalization.NumberStyles.HexNumber);
+        return Color.FromRgb((byte)(v >> 16), (byte)(v >> 8), (byte)v);
+    }
+
+    private static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
     private readonly SlimeSkinKind _kind;
     private readonly List<Border> _swatches = new();
     private Color _color = PaletteColors[0];
     private bool _erasing;
 
+    private readonly AppSettings _settings;
+    private readonly List<Border> _recentSwatches = new();
+    /// <summary>배경이 채워져 있으면 그 색. null 이면 투명.</summary>
+    private Color? _bgColor;
+    private const int MaxRecent = 8;
+
+    private readonly string _themeName;
+    private bool _sideOpen;
+    private const double ClosedWidth = 470, OpenWidth = 660, SideWidth = 190;
+
     /// <summary>적용을 눌러 저장까지 끝났는가.</summary>
     public bool Saved { get; private set; }
 
-    public SkinDrawWindow(SlimeSkinKind kind, string themeName)
+    public SkinDrawWindow(SlimeSkinKind kind, string themeName, AppSettings settings)
     {
         _kind = kind;
+        _themeName = themeName;
+        _settings = settings;
         InitializeComponent();
         DwmChrome.AttachTo(this); // 설정창과 같은 둥근 모서리·그림자·테두리
 
         TitleText.Text = $"{themeName} — 공에 그리기";
         Checker.Fill = MakeCheckerBrush();
         BuildPalette();
+        BuildRecent();
         ApplyBrush();
+        UpdateBackgroundUi();
 
         // 이미 커스텀 이미지가 있으면 배경으로 깔아 그 위에 이어 그릴 수 있게 한다.
         BgImage.Source = SkinImageStore.Load(kind);
+        BuildTemplateList();
     }
 
     private void OnTitleBarDrag(object sender, MouseButtonEventArgs e)
@@ -77,10 +103,10 @@ public partial class SkinDrawWindow : Window
         {
             var swatch = new Border
             {
-                Width = 30,
-                Height = 30,
-                Margin = new Thickness(0, 6, 8, 0),
-                CornerRadius = new CornerRadius(15),
+                Width = 26,
+                Height = 26,
+                Margin = new Thickness(0, 6, 6, 0),
+                CornerRadius = new CornerRadius(13),
                 Background = new SolidColorBrush(c),
                 BorderThickness = new Thickness(2.5),
                 BorderBrush = Brushes.Transparent,
@@ -104,6 +130,70 @@ public partial class SkinDrawWindow : Window
         var accent = (Brush)FindResource("Accent");
         foreach (var s in _swatches)
             s.BorderBrush = !_erasing && (Color)s.Tag! == _color ? accent : Brushes.Transparent;
+        foreach (var s in _recentSwatches)
+            s.BorderBrush = !_erasing && (Color)s.Tag! == _color ? accent : Brushes.Transparent;
+    }
+
+    // ── 최근 색 / 임의 색 ───────────────────────────────────
+    private void BuildRecent()
+    {
+        Recent.Children.Clear();
+        _recentSwatches.Clear();
+        foreach (string hex in _settings.DrawRecentColors.Take(MaxRecent))
+        {
+            Color c;
+            try { c = ParseHex(hex.TrimStart('#')); } catch { continue; }
+            var swatch = new Border
+            {
+                Width = 26, Height = 26,
+                Margin = new Thickness(0, 4, 6, 0),
+                CornerRadius = new CornerRadius(13),
+                Background = new SolidColorBrush(c),
+                BorderThickness = new Thickness(2.5),
+                BorderBrush = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                Tag = c,
+            };
+            swatch.MouseLeftButtonUp += (_, _) => { _color = c; _erasing = false; ApplyBrush(); };
+            _recentSwatches.Add(swatch);
+            Recent.Children.Add(swatch);
+        }
+        if (_recentSwatches.Count == 0)
+            Recent.Children.Add(new TextBlock { Text = "(임의 색을 고르면 여기에 남습니다)", Style = (Style)FindResource("RowDesc"), Margin = new Thickness(0, 4, 0, 0) });
+    }
+
+    private void PushRecent(Color c)
+    {
+        string hex = ToHex(c);
+        var list = _settings.DrawRecentColors;
+        list.RemoveAll(x => string.Equals(x, hex, StringComparison.OrdinalIgnoreCase));
+        list.Insert(0, hex);
+        while (list.Count > MaxRecent) list.RemoveAt(list.Count - 1);
+        _settings.NotifyDrawRecentColorsChanged();
+        BuildRecent();
+    }
+
+    private void OnOpenCustomColor(object sender, RoutedEventArgs e)
+    {
+        Picker.SetColor(_color);
+        ColorPopup.IsOpen = true;
+    }
+
+    /// <summary>선택기에서 색이 바뀔 때마다 붓에 바로 반영(미리 그려 볼 수 있게). 최근 칸에는 '이 색으로' 를 눌러야 들어간다.</summary>
+    private void OnPickerColorChanged(object? sender, Color c)
+    {
+        _color = c;
+        _erasing = false;
+        ApplyBrush();
+    }
+
+    private void OnUseCustomColor(object sender, RoutedEventArgs e)
+    {
+        _color = Picker.Color;
+        _erasing = false;
+        ApplyBrush();
+        PushRecent(_color);
+        ColorPopup.IsOpen = false;
     }
 
     // ── 붓 / 지우개 ─────────────────────────────────────────
@@ -156,15 +246,41 @@ public partial class SkinDrawWindow : Window
     {
         Ink.Strokes.Clear();
         BgImage.Source = null; // 불러온 이미지까지 완전히 비운다
+        _bgColor = null;       // 배경색도 함께 없앤다
+        UpdateBackgroundUi();
     }
 
-    private void OnFillBgChanged(object sender, RoutedEventArgs e)
-        => BgFill.Fill = FillBg.IsChecked == true ? Brushes.White : Brushes.Transparent;
+    // ── 배경 ────────────────────────────────────────────────
+    /// <summary>누른 순간의 붓 색으로 배경을 채운다. 이후 붓 색을 바꿔도 배경은 그대로다.</summary>
+    private void OnFillBackground(object sender, RoutedEventArgs e)
+    {
+        _bgColor = _color;
+        UpdateBackgroundUi();
+    }
+
+    private void OnClearBackground(object sender, RoutedEventArgs e)
+    {
+        _bgColor = null;
+        UpdateBackgroundUi();
+    }
+
+    private void UpdateBackgroundUi()
+    {
+        BgFill.Fill = _bgColor is { } c ? new SolidColorBrush(c) : Brushes.Transparent;
+        BgSwatch.Background = _bgColor is { } c2 ? new SolidColorBrush(c2) : Brushes.Transparent;
+        ClearBgBtn.IsEnabled = _bgColor != null;
+        BgDesc.Text = _bgColor is { } c3
+            ? $"배경 {ToHex(c3)}. 다시 채우면 지금 붓 색으로 바뀌고, 지우면 투명이 됩니다."
+            : "배경 없음(투명). 채우기를 누르면 지금 붓 색으로 깔립니다.";
+    }
+
+    /// <summary>선·바탕 그림·배경이 모두 없는가(불러오기 확인, 저장 가능 판정에 쓴다).</summary>
+    private bool IsCanvasEmpty() => Ink.Strokes.Count == 0 && BgImage.Source == null && _bgColor == null;
 
     // ── 확정 ────────────────────────────────────────────────
     private void OnSave(object sender, RoutedEventArgs e)
     {
-        if (Ink.Strokes.Count == 0 && BgImage.Source == null)
+        if (IsCanvasEmpty())
         {
             MessageBox.Show(this, "그린 내용이 없습니다.", "ThrowMe",
                 MessageBoxButton.OK, MessageBoxImage.Information);
@@ -179,8 +295,135 @@ public partial class SkinDrawWindow : Window
             return;
         }
 
+        // 공에 적용한 그림은 템플릿 목록에도 자동 보관한다(직전 자동 항목과 같으면 건너뜀). 보관 실패는 적용을 막지 않는다.
+        DrawTemplateStore.AddAuto(bmp, _themeName);
+
         Saved = true;
         Close();
+    }
+
+    // ── 템플릿 사이드 탭 ────────────────────────────────────
+    private void OnToggleSide(object sender, RoutedEventArgs e)
+    {
+        _sideOpen = !_sideOpen;
+        SideCol.Width = new GridLength(_sideOpen ? SideWidth : 0);
+        Width = _sideOpen ? OpenWidth : ClosedWidth;
+        SideToggle.Content = _sideOpen ? "◂ 템플릿" : "템플릿 ▸";
+        if (_sideOpen) BuildTemplateList();
+    }
+
+    private void BuildTemplateList()
+    {
+        TemplateList.Children.Clear();
+        var items = DrawTemplateStore.List();
+        if (items.Count == 0)
+        {
+            TemplateList.Children.Add(new TextBlock
+            {
+                Text = "보관된 템플릿이 없습니다.\n공에 적용하면 자동으로 보관되고, 위에서 이름을 붙여 저장할 수도 있어요.",
+                Style = (Style)FindResource("RowDesc"), TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        foreach (var t in items)
+        {
+            var thumb = new Border
+            {
+                Width = 64, Height = 64, CornerRadius = new CornerRadius(8),
+                Background = MakeCheckerBrush(),
+                Child = new Image { Source = DrawTemplateStore.Load(t.Id, 128), Stretch = Stretch.Uniform },
+            };
+            var name = new TextBlock
+            {
+                Text = t.Name, Foreground = (Brush)FindResource("TextBrush"), FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = t.Name,
+            };
+            var meta = new TextBlock
+            {
+                Text = t.Auto ? $"{t.Theme} · 자동" : t.Theme,
+                Style = (Style)FindResource("RowDesc"), Margin = new Thickness(0, 2, 0, 0),
+            };
+            var texts = new StackPanel { Margin = new Thickness(8, 2, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            texts.Children.Add(name);
+            texts.Children.Add(meta);
+
+            var remove = new Button
+            {
+                Content = "✕", Width = 24, Height = 24, FontSize = 11, Cursor = Cursors.Hand,
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                Foreground = (Brush)FindResource("MutedBrush"), VerticalAlignment = VerticalAlignment.Top,
+                ToolTip = "삭제",
+            };
+            string id = t.Id;
+            remove.Click += (_, ev) => { ev.Handled = true; DrawTemplateStore.Remove(id); BuildTemplateList(); };
+
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(thumb, 0); Grid.SetColumn(texts, 1); Grid.SetColumn(remove, 2);
+            row.Children.Add(thumb); row.Children.Add(texts); row.Children.Add(remove);
+
+            var card = new Border
+            {
+                Background = (Brush)FindResource("CardBg"), CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(6), Cursor = Cursors.Hand, Child = row, Margin = new Thickness(0, 0, 0, 6),
+            };
+            card.MouseLeftButtonUp += (_, _) => LoadTemplate(id);
+            TemplateList.Children.Add(card);
+        }
+    }
+
+    /// <summary>템플릿을 캔버스에 깐다. 선·바탕 그림·배경을 모두 지우고 템플릿만 남긴다(그린 것이 있으면 확인).</summary>
+    private void LoadTemplate(string id)
+    {
+        if (!IsCanvasEmpty())
+        {
+            var r = MessageBox.Show(this, "지금 그린 내용을 지우고 이 템플릿으로 바꿀까요?", "ThrowMe",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (r != MessageBoxResult.Yes) return;
+        }
+        var img = DrawTemplateStore.Load(id);
+        if (img == null)
+        {
+            MessageBox.Show(this, "템플릿 파일을 읽지 못했습니다. 목록에서 지워 주세요.", "ThrowMe",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        Ink.Strokes.Clear();
+        _bgColor = null;
+        UpdateBackgroundUi();
+        BgImage.Source = img;
+    }
+
+    private void OnSaveAsTemplate(object sender, RoutedEventArgs e)
+    {
+        if (!_sideOpen) OnToggleSide(sender, e);
+        TemplateNameBox.Focus();
+        TemplateNameBox.SelectAll();
+    }
+
+    private void OnTemplateNameKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) { OnSaveTemplateNamed(sender, e); e.Handled = true; }
+    }
+
+    private void OnSaveTemplateNamed(object sender, RoutedEventArgs e)
+    {
+        if (IsCanvasEmpty())
+        {
+            MessageBox.Show(this, "저장할 그림이 없습니다.", "ThrowMe", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var bmp = RenderDrawArea();
+        if (bmp == null || DrawTemplateStore.AddNamed(bmp, TemplateNameBox.Text, _themeName) == null)
+        {
+            MessageBox.Show(this, "템플릿을 저장하지 못했습니다. 로그를 확인하세요.", "ThrowMe", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        TemplateNameBox.Text = "";
+        BuildTemplateList();
     }
 
     private void OnCancel(object sender, RoutedEventArgs e) => Close();

@@ -576,7 +576,7 @@ public partial class SettingsWindow : Window
     private void OnDrawSkinImage(object sender, RoutedEventArgs e)
     {
         var kind = _settings.Skin;
-        var win = new SkinDrawWindow(kind, CurrentThemeName()) { Owner = this };
+        var win = new SkinDrawWindow(kind, CurrentThemeName(), _settings) { Owner = this };
         win.ShowDialog();
         // 빈 문자열 = 이미지는 있으나 원본 파일이 없음(직접 그린 것)
         if (win.Saved) SetSkinImageRecord(kind, "");

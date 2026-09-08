@@ -1,6 +1,7 @@
 <Window x:Class="ThrowMe.Views.SkinDrawWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ThrowMe.Views"
         Title="공에 그리기"
         Width="470" Height="700"
         WindowStyle="None" ResizeMode="NoResize"
@@ -17,18 +18,49 @@
                 <RowDefinition Height="42"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SideCol" Width="0"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
             <!-- 타이틀 바 -->
-            <Grid Grid.Row="0" Background="{StaticResource SideBg}" MouseLeftButtonDown="OnTitleBarDrag">
+            <Grid Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource SideBg}" MouseLeftButtonDown="OnTitleBarDrag">
+                <Button x:Name="SideToggle" Content="템플릿 ▸" Click="OnToggleSide" Width="84" Height="42"
+                        HorizontalAlignment="Left" Background="Transparent" BorderThickness="0"
+                        Foreground="{StaticResource MutedBrush}" FontSize="12" Cursor="Hand" Margin="6,0,0,0"/>
                 <TextBlock x:Name="TitleText" Text="공에 그리기" Foreground="{StaticResource TextBrush}"
-                           FontWeight="SemiBold" FontSize="13" Margin="16,0,0,0" VerticalAlignment="Center"/>
+                           FontWeight="SemiBold" FontSize="13" Margin="96,0,0,0" VerticalAlignment="Center"/>
                 <Button Content="✕" Click="OnCancel" Width="42" Height="42" HorizontalAlignment="Right"
                         Background="Transparent" BorderThickness="0" Foreground="{StaticResource MutedBrush}"
                         FontSize="13" Cursor="Hand"/>
             </Grid>
 
+            <!-- ═══ 왼쪽 사이드 탭: 템플릿 ═══ -->
+            <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource SideBg}" Padding="12,12,8,12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="템플릿" Style="{StaticResource Section}" Margin="0,0,0,8"/>
+                    <!-- 이름 저장 -->
+                    <StackPanel Grid.Row="1" Margin="0,0,0,10">
+                        <TextBox x:Name="TemplateNameBox" Style="{StaticResource DarkTextBox}" Height="30"
+                                 VerticalContentAlignment="Center" KeyDown="OnTemplateNameKeyDown"/>
+                        <Button Style="{StaticResource OutlineButton}" Content="현재 그림 저장" Height="30" Margin="0,6,0,0"
+                                Click="OnSaveTemplateNamed"/>
+                        <TextBlock Text="이름을 비우면 '템플릿 N' 으로 저장됩니다. 공에 적용한 그림은 자동으로도 보관됩니다(최근 20개)."
+                                   Style="{StaticResource RowDesc}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    </StackPanel>
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="TemplateList"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
             <!-- 화면이 작아도 도구·저장 버튼에 반드시 닿을 수 있도록 스크롤 허용 -->
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="22,14,22,16">
 
                 <TextBlock Text="원 안에 그린 그대로 공 표면이 됩니다. 원 밖은 잘립니다."
@@ -56,8 +88,29 @@
                 </Border>
 
                 <!-- ═══ 색 ═══ -->
-                <TextBlock Text="색" Style="{StaticResource Section}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="색" Style="{StaticResource Section}"/>
+                    <Button x:Name="CustomColorBtn" Grid.Column="1" Style="{StaticResource GhostButton}" Content="임의 색…"
+                            MinWidth="84" Height="30" VerticalAlignment="Bottom" Click="OnOpenCustomColor"/>
+                </Grid>
                 <WrapPanel x:Name="Palette"/>
+                <!-- 임의 색 선택기. CustomColorBtn 아래에 뜨고, 바깥을 누르면 닫힌다. -->
+                <Popup x:Name="ColorPopup" PlacementTarget="{Binding ElementName=CustomColorBtn}" Placement="Bottom"
+                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                    <Border Background="{StaticResource CardBg}" CornerRadius="10" Padding="12"
+                            BorderBrush="#33FFFFFF" BorderThickness="1">
+                        <StackPanel>
+                            <local:HsvColorPicker x:Name="Picker" ColorChanged="OnPickerColorChanged"/>
+                            <Button Style="{StaticResource AccentButton}" Content="이 색으로" Height="32" Margin="0,10,0,0"
+                                    Click="OnUseCustomColor"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBlock Text="최근" Style="{StaticResource RowDesc}" VerticalAlignment="Center" Margin="0,4,10,0"/>
+                    <WrapPanel x:Name="Recent"/>
+                </StackPanel>
 
                 <!-- ═══ 붓 ═══ -->
                 <Grid Margin="0,14,0,0">
@@ -75,11 +128,17 @@
                 <Grid Margin="0,10,0,0">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="배경 채우기(흰색)" Style="{StaticResource RowLabel}"/>
-                        <TextBlock Text="끄면 그린 부분만 남고 나머지는 투명해집니다." Style="{StaticResource RowDesc}"/>
+                        <TextBlock Text="배경" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="BgDesc" Text="배경 없음(투명). 채우기를 누르면 지금 붓 색으로 깔립니다." Style="{StaticResource RowDesc}"/>
                     </StackPanel>
-                    <CheckBox x:Name="FillBg" Grid.Column="1" Style="{StaticResource Toggle}"
-                              VerticalAlignment="Center" Click="OnFillBgChanged"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border x:Name="BgSwatch" Width="22" Height="22" CornerRadius="11" Margin="0,0,8,0"
+                                BorderBrush="#66FFFFFF" BorderThickness="1" Background="Transparent"/>
+                        <Button Style="{StaticResource GhostButton}" Content="배경 채우기" MinWidth="96" Height="32"
+                                Margin="0,0,6,0" Click="OnFillBackground"/>
+                        <Button x:Name="ClearBgBtn" Style="{StaticResource GhostButton}" Content="배경 지우기" MinWidth="96" Height="32"
+                                IsEnabled="False" Click="OnClearBackground"/>
+                    </StackPanel>
                 </Grid>
 
                 <!-- ═══ 도구 ═══ -->
@@ -90,6 +149,8 @@
                             MinWidth="88" Height="36" Margin="0,0,8,0" Click="OnUndo"/>
                     <Button Style="{StaticResource GhostButton}" Content="전체 지우기"
                             MinWidth="100" Height="36" Click="OnClearAll"/>
+                    <Button Style="{StaticResource GhostButton}" Content="템플릿으로 저장"
+                            MinWidth="120" Height="36" Margin="8,0,0,0" Click="OnSaveAsTemplate"/>
                 </StackPanel>
 
                 <!-- ═══ 확정 ═══ -->

@@ -602,6 +602,13 @@ public sealed class AppSettings : INotifyPropertyChanged
     private double _skinImageScale = 1.0;
     public double SkinImageScale { get => _skinImageScale; set => Set(ref _skinImageScale, value); }
 
+    /// <summary>그리기 창 최근 임의 색(#RRGGBB, 최신이 앞). 최대 8개. 팔레트 스와치를 고른 것은 넣지 않는다.</summary>
+    public List<string> DrawRecentColors { get; set; } = new();
+
+    /// <summary>DrawRecentColors 내용을 바꾼 뒤 호출 — 자동 저장을 유발한다.</summary>
+    public void NotifyDrawRecentColorsChanged()
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DrawRecentColors)));
+
     /// <summary>테마별 커스텀 이미지 원본 파일명(표시용). 키 = <see cref="SlimeSkinKind"/> 이름.
     /// 실제 이미지는 %APPDATA%/ThrowMe/skins/&lt;스킨&gt;.png 로 복사해 보관한다
     /// (원본을 옮기거나 지워도 깨지지 않도록). 키가 있으면 그 테마에 커스텀 이미지가 있다는 뜻.
