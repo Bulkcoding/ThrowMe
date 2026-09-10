@@ -152,6 +152,13 @@ public partial class SlimeWindow
     private void ApplyCrawlShape(double headingRad, double lungeAmount, double seqT)
     {
         if (_animation == null) return;
+        if (Sprite3DOn)
+        {
+            _animation.CrawlShape = null;
+            bool keyring = _settings.AutoMove == AutoMoveMode.CursorFollow && _settings.CursorFollowStyle == CursorFollowStyle.Keyring;
+            _spriteMotion?.SetHop(seqT, !keyring && AutoMoveActive && seqT > 0);
+            return;
+        }
 
         // 스킨이 실루엣을 직접 그릴 수 있으면 그쪽에 맡긴다 — 스케일 변형은 찌그러진 타원이
         // 될 뿐이라 바닥에 눌린 돔과 꼬리가 나오지 않는다. 둘을 겹치면 이중으로 뭉개진다.
@@ -190,11 +197,15 @@ public partial class SlimeWindow
         && _settings.SlimeVisible
         && !BowlingOn
         // 슬라임(젤리) 전용. 설정에서도 막지만, 저장 파일이 어긋난 경우를 대비해 여기서도 확인한다.
-        && _settings.Skin == SlimeSkinKind.Jelly;
+        && _settings.Skin is SlimeSkinKind.Jelly or SlimeSkinKind.Sprite3D;
 
     /// <summary>설정이 바뀌면 창 속성·중력을 다시 맞춘다.</summary>
     private void ApplyAutoMove()
     {
+        CancelSprite3DInteraction();
+        _spriteMotion?.SetHop(0, false);
+        _spriteMotion?.SyncSpin(0);
+        DrawSprite3D();
         // 작업표시줄 모드는 중력이 필요하고, 커서 따라가기·기어다니기는 무중력이라야 한다.
         UpdateSkinBehavior();
         // 작업표시줄과 커서 따라가기는 작업을 가리는 자리에 있으므로 클릭을 통과시킨다.
@@ -225,6 +236,7 @@ public partial class SlimeWindow
     /// </summary>
     private void UpdateAutoMoveNotice()
     {
+        if (!_enableExternalIntegrations) return;
         bool clickThroughMode = _settings.AutoMove is AutoMoveMode.Taskbar or AutoMoveMode.CursorFollow;
         if (!clickThroughMode)
         {
@@ -285,6 +297,7 @@ public partial class SlimeWindow
     {
         if (!AutoMoveActive)
         {
+            _spriteMotion?.SetHop(0, false);
             _physics.Propulsion = Vector2.Zero;
             _physics.AutoMoving = false;
             if (_animation != null) _animation.CrawlShape = null;      // 평소 형태로 되돌린다
@@ -295,6 +308,7 @@ public partial class SlimeWindow
         // 자동 이동 중에는 스핀 회전이 남지 않게 유지한다(기울어진 채 걷지 않도록).
         _physics.SpinAngle = 0;
         _physics.AngularVelocity = 0;
+        _spriteMotion?.SyncSpin(0);
 
         // 목표 속도(px/s). 화면 배율을 곱해 어느 화면에서도 같은 빠르기로 보이게 한다.
         double speed = _settings.AutoMoveSpeed * _settings.DisplayScale;

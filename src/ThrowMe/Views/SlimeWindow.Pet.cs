@@ -35,6 +35,7 @@ public partial class SlimeWindow
     /// <summary>설정에 맞춰 수신 서버를 켜거나 끈다.</summary>
     private void UpdateCliLink()
     {
+        if (!_enableExternalIntegrations) return;
         if (_settings.CliLinkEnabled)
         {
             if (_cli == null)

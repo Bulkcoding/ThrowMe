@@ -123,7 +123,7 @@ public partial class SlimeWindow
         }
 
         // 공통 원형 그림자는 종이비행기에 어울리지 않는다(스킨이 자기 그림자를 갖고 있다).
-        CommonShadow.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        CommonShadow.Visibility = on || Sprite3DOn ? Visibility.Collapsed : Visibility.Visible;
 
         ApplyPaperPlaneThrowPower();
 
@@ -278,6 +278,7 @@ public partial class SlimeWindow
 
     private void RegisterWindHotkey()
     {
+        if (!_enableExternalIntegrations) return;
         if (_hwnd == IntPtr.Zero || _windHotkeyRegistered) return;
         if (RegisterHotKey(_hwnd, WindHotkeyId, MOD_CONTROL, (uint)_settings.WindHotkeyVk))
             _windHotkeyRegistered = true;

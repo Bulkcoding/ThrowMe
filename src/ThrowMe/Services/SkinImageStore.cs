@@ -22,7 +22,52 @@ public static class SkinImageStore
 
     /// <summary>커스텀 이미지를 지원하는 테마. 몬스터볼/하이퍼볼/마스터볼은 고유 디자인이라 제외.</summary>
     public static bool Supports(SlimeSkinKind kind)
-        => kind is SlimeSkinKind.Jelly or SlimeSkinKind.Billiard;
+        => kind is SlimeSkinKind.Jelly or SlimeSkinKind.Billiard or SlimeSkinKind.Sprite3D;
+
+    /// <summary>파일 없음은 기본 모델, 접근/해독 실패는 테마 대체로 구분한다.</summary>
+    public static bool TryLoadSprite3D(out BitmapSource? image)
+    {
+        image = null;
+        try
+        {
+            string path = PathFor(SlimeSkinKind.Sprite3D);
+            try { _ = File.GetAttributes(path); }
+            catch (FileNotFoundException) { return true; }
+            catch (DirectoryNotFoundException) { return true; }
+            ValidateSprite3DFile(path, 8 * 1024 * 1024, 4096);
+            Invalidate(SlimeSkinKind.Sprite3D); // 헤더는 같아도 본문이 바뀌었거나 손상될 수 있다.
+            image = Load(SlimeSkinKind.Sprite3D);
+            return image != null;
+        }
+        catch (Exception ex) { Logger.Error("3D image unavailable; using jelly.", ex); return false; }
+    }
+
+    private static void ValidateSprite3DFile(string path, long maxBytes, int maxDimension)
+    {
+        if (new FileInfo(path).Length > maxBytes) throw new InvalidDataException("이미지 파일이 너무 큽니다.");
+        var info = SixLabors.ImageSharp.Image.Identify(path);
+        if (info.Width <= 0 || info.Height <= 0 || info.Width > maxDimension || info.Height > maxDimension)
+            throw new InvalidDataException("이미지 크기 제한을 초과했습니다.");
+    }
+
+    public static bool ImportSprite3DRoomImage(string base64)
+    {
+        const int maxBytes = 600 * 1024;
+        try
+        {
+            if (base64.Length > (maxBytes + 2) / 3 * 4) return false;
+            byte[] bytes = Convert.FromBase64String(base64);
+            if (bytes.Length < 8 || bytes.Length > maxBytes || !bytes.AsSpan(0,8).SequenceEqual(new byte[]{137,80,78,71,13,10,26,10})) return false;
+            using var stream = new MemoryStream(bytes, writable:false);
+            var info = SixLabors.ImageSharp.Image.Identify(stream);
+            if (info.Width <= 0 || info.Height <= 0 || info.Width > 512 || info.Height > 512) return false;
+            stream.Position = 0;
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit(); bitmap.CacheOption=BitmapCacheOption.OnLoad; bitmap.StreamSource=stream; bitmap.EndInit(); bitmap.Freeze();
+            return SaveBitmap(SlimeSkinKind.Sprite3D, bitmap);
+        }
+        catch(Exception ex) { Logger.Error("Invalid 3D room image; previous image retained.",ex); return false; }
+    }
 
     private static string Dir
     {
@@ -80,6 +125,7 @@ public static class SkinImageStore
     {
         try
         {
+            if (kind == SlimeSkinKind.Sprite3D) ValidateSprite3DFile(sourceFile, 8 * 1024 * 1024, 4096);
             BitmapSource src;
             using (var fs = File.OpenRead(sourceFile))
             {

@@ -143,6 +143,8 @@ public sealed class HandoffData
     [JsonPropertyName("surfaceSpin")] public double SurfaceSpin { get; set; }
     [JsonPropertyName("surfaceSpinAxisDeg")] public double SurfaceSpinAxisDeg { get; set; }
     [JsonPropertyName("spinAngle")] public double SpinAngle { get; set; }
+    [JsonPropertyName("orientation3D")] public double[]? Orientation3D { get; set; }
+    [JsonPropertyName("angularVelocity3D")] public double[]? AngularVelocity3D { get; set; }
 }
 
 public sealed class AckData

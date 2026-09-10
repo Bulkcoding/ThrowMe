@@ -53,6 +53,22 @@ public static class AppPaths
     /// <summary>실제로 쓰기로 결정된 데이터 폴더. <see cref="Initialize"/> 가 정한다.</summary>
     private static string? _root;
 
+    private static string? _dirOverride;
+    /// <summary>시험 프로세스의 격리 경로. 첫 데이터 접근 전에만 지정한다.</summary>
+    internal static string? DirOverride
+    {
+        get => _dirOverride;
+        set
+        {
+            lock (Gate)
+            {
+                if (_root != null || _migrated) throw new InvalidOperationException("데이터 경로 초기화 이후에는 변경할 수 없습니다.");
+                if (value != null && !Path.IsPathFullyQualified(value)) throw new ArgumentException("절대 경로가 필요합니다.", nameof(value));
+                _dirOverride = value == null ? null : Path.GetFullPath(value);
+            }
+        }
+    }
+
     /// <summary>
     /// 설정·스킨·로그가 들어가는 폴더. 기본은 <see cref="SharedRoot"/>,
     /// 만들 수 없으면 예전 위치(%APPDATA%\ThrowMe)로 물러난다.
@@ -76,6 +92,13 @@ public static class AppPaths
             lock (Gate)
             {
                 if (_root != null) return _root;
+
+                if (_dirOverride != null)
+                {
+                    Directory.CreateDirectory(_dirOverride);
+                    _root = _dirOverride;
+                    return _root;
+                }
 
                 string legacy = Ensure(Environment.SpecialFolder.ApplicationData);
                 try
