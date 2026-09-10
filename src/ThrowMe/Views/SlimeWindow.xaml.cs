@@ -159,6 +159,8 @@ public partial class SlimeWindow : Window
 
         _hitTextOverlay = new HitTextOverlayWindow(_monitors);
         _hitTextOverlay.Show();
+        // 숨긴 채 시작(핸들만 만든 경우)이면 오버레이도 감춰 둔다. 다시 보이기에서 ApplyVisibility 가 함께 띄운다.
+        if (!_settings.SlimeVisible) { _overlay.Hide(); _hitTextOverlay.Hide(); }
 
         // 전역 잡기 단축키 등록
         _hwnd = new WindowInteropHelper(this).Handle;

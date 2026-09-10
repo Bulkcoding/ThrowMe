@@ -131,6 +131,10 @@ public partial class App : Application
         _slimeWindow = new SlimeWindow(_settings, _monitorService);
         if (_settings.SlimeVisible)
             _slimeWindow.Show();
+        else
+            // 숨긴 채 시작해도 창 핸들은 있어야 한다. 전역 단축키(숨기기 토글·잡기)·CLI 수신 서버가
+            // SourceInitialized 에서 등록되는데, Show() 를 안 하면 핸들이 없어 다시 보이게 할 방법이 없었다.
+            new System.Windows.Interop.WindowInteropHelper(_slimeWindow).EnsureHandle();
 
         _tray = new TrayIconService(
             _settings,
