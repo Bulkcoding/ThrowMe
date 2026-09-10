@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -391,6 +391,7 @@ public partial class SettingsWindow : Window
         (SlimeSkinKind.Basketball, "농구공"),
         (SlimeSkinKind.Bowling, "볼링공"),
         (SlimeSkinKind.PaperPlane, "종이비행기"),
+        (SlimeSkinKind.Sprite3D, "3D 공"),
     };
 
     private void BuildThemeCards()
@@ -430,6 +431,14 @@ public partial class SettingsWindow : Window
                 Cursor = Cursors.Hand,
                 Child = stack,
                 Tag = kind,
+                Focusable = true,
+                ToolTip = kind == SlimeSkinKind.Sprite3D ? "우클릭한 채 상하좌우로 돌려 보세요. 놓으면 관성으로 회전하고, 짧은 우클릭은 메뉴를 엽니다. 자동 이동을 끈 상태에서 조작할 수 있습니다." : null,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(card, name);
+            card.KeyDown += (_, e) =>
+            {
+                if (e.Key is System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space)
+                { _settings.Skin = kind; e.Handled = true; }
             };
             card.MouseLeftButtonUp += (_, _) => _settings.Skin = kind;
             _themeCards[kind] = card;
@@ -441,6 +450,7 @@ public partial class SettingsWindow : Window
     private UserControl MakeSkin(SlimeSkinKind kind) => kind switch
     {
         SlimeSkinKind.Pet => MakePetPreview(),
+        SlimeSkinKind.Sprite3D => SlimeWindow.CreateSprite3D(_settings),
         SlimeSkinKind.Billiard => new BilliardSkin(),
         SlimeSkinKind.Pokeball or SlimeSkinKind.Ultra or SlimeSkinKind.Master => new BallSkin(kind),
         SlimeSkinKind.Basketball => new BasketballSkin(),
@@ -456,7 +466,7 @@ public partial class SettingsWindow : Window
         var design = new Grid { Width = 96, Height = 96 };
         design.Children.Add(MakeSkin(kind));
 
-        var img = _settings.SkinImageEnabled && SkinImageStore.Supports(kind)
+        var img = kind != SlimeSkinKind.Sprite3D && _settings.SkinImageEnabled && SkinImageStore.Supports(kind)
             ? SkinImageStore.Load(kind)
             : null;
         if (img != null)
@@ -831,7 +841,7 @@ public partial class SettingsWindow : Window
     /// <summary>자동 이동은 슬라임(젤리) 테마 전용. 다른 테마에서는 카드를 잠그고 이유를 보여 준다.</summary>
     private void UpdateAutoMoveLock()
     {
-        bool locked = _settings.Skin != SlimeSkinKind.Jelly;
+        bool locked = _settings.Skin is not (SlimeSkinKind.Jelly or SlimeSkinKind.Sprite3D);
         AutoMoveLockedNotice.Visibility = locked ? Visibility.Visible : Visibility.Collapsed;
         AutoMoveRows.IsEnabled = !locked;
         AutoMoveRows.Opacity = locked ? 0.45 : 1.0;

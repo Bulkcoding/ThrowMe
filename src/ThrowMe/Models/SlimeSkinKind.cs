@@ -29,4 +29,6 @@ public enum SlimeSkinKind
 
     /// <summary>펫 — 가져온 Codex Pet 스프라이트시트(AppSettings.PetId). CLI 상태에 따라 동작이 바뀐다.</summary>
     Pet = 8,
+    /// <summary>실시간 3D 공. 저장 및 구버전 방 호환을 위해 값 9를 유지한다.</summary>
+    Sprite3D = 9,
 }

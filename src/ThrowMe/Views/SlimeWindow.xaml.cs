@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -109,8 +109,14 @@ public partial class SlimeWindow : Window
         "트레이 아이콘을 우클릭하면 일시정지·숨기기·설정을 열 수 있어요.",
     };
 
+    private readonly bool _enableExternalIntegrations;
+
     public SlimeWindow(AppSettings settings, MonitorLayoutService monitors)
+        : this(settings, monitors, true) { }
+
+    internal SlimeWindow(AppSettings settings, MonitorLayoutService monitors, bool enableExternalIntegrations)
     {
+        _enableExternalIntegrations = enableExternalIntegrations;
         _settings = settings;
         _monitors = monitors;
 
@@ -127,7 +133,7 @@ public partial class SlimeWindow : Window
         ApplySkin();      // 스킨 적용 시 UpdateSkinBehavior 가 _physics 를 참조하므로 그 뒤에 호출
         BuildSpinFx();
         // 릴레이 설정이 있으면 네트워크 확장 활성화(연결된 엣지 통과 허용 + 핸드오프 조정자).
-        _auth = AuthService.Load();
+        _auth = enableExternalIntegrations ? AuthService.Load() : new AuthService();
         if (_auth.IsConfigured) SetupNetworking();
 
         _audio = new AudioService(_settings);
@@ -138,6 +144,11 @@ public partial class SlimeWindow : Window
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         MouseMove += OnMouseMove;
         MouseLeftButtonUp += OnMouseLeftButtonUp;
+        PreviewMouseRightButtonDown += OnSpriteRightDown;
+        PreviewMouseRightButtonUp += OnSpriteRightUp;
+        ContextMenuOpening += OnSpriteContextMenu;
+        LostMouseCapture += OnSpriteCaptureLost;
+        Deactivated += OnSpriteDeactivated;
 
         _monitors.LayoutChanged += OnMonitorLayoutChanged;
     }
@@ -186,6 +197,7 @@ public partial class SlimeWindow : Window
     /// <summary>설정에 따라 힌트 타이머를 켜거나 끈다.</summary>
     private void UpdateTipTimer()
     {
+        if (!_enableExternalIntegrations) return;
         if (_settings.ShowUsageTips)
         {
             if (_tipTimer == null)
@@ -238,6 +250,7 @@ public partial class SlimeWindow : Window
 
     private void RegisterHotkeys()
     {
+        if (!_enableExternalIntegrations) return;
         if (_hwnd == IntPtr.Zero) return;
         // 키보드 트리거
         UnregisterHotKey(_hwnd, CatchHotkeyId);
@@ -297,6 +310,7 @@ public partial class SlimeWindow : Window
 
     private void UpdateOpenSettingsHook()
     {
+        if (!_enableExternalIntegrations) return;
         bool want = _settings.OpenSettingsHoldVk != 0 && _settings.OpenSettingsVk != 0;
         if (!want)
         {
@@ -415,6 +429,7 @@ public partial class SlimeWindow : Window
         else if (!show)
         {
             try { Hide(); } catch { }
+            if (_settings.Skin == SlimeSkinKind.Sprite3D) StopRendering();
         }
 
         // 테마가 띄운 것은 전부 함께 감춘다(규칙 §3.6) — 슬라임만 사라지면 숨긴 티가 남는다.
@@ -557,6 +572,7 @@ public partial class SlimeWindow : Window
     /// </summary>
     private void UpdateInfiniteBounceNotice()
     {
+        if (!_enableExternalIntegrations) return;
         if (!_settings.InfiniteBounce)
         {
             ToastWindow.CloseSticky(InfiniteBounceNoticeKey);
@@ -591,9 +607,9 @@ public partial class SlimeWindow : Window
     private void UpdateSkinBehavior()
     {
         if (_animation != null)
-            _animation.Rigid = _settings.Skin != SlimeSkinKind.Jelly; // 젤리만 말랑, 나머지는 단단
+            _animation.Rigid = SkinHost.Content is not JellySkin;
         if (_animation != null)
-            _animation.Upright = _settings.Skin == SlimeSkinKind.Pet; // 펫은 스핀에 따라 돌지 않고 늘 바로 선다
+            _animation.Upright = _settings.Skin == SlimeSkinKind.Pet || Sprite3DOn;
 
         bool basketball = _settings.Skin == SlimeSkinKind.Basketball;
         bool paperPlane = _settings.Skin == SlimeSkinKind.PaperPlane;
@@ -721,6 +737,8 @@ public partial class SlimeWindow : Window
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (_spriteCandidate || _spriteMotion?.IsDragging == true) return;
+        _spriteMotion?.CancelDrag();
         // 자동 이동 중에는 마우스로 잡거나 던질 수 없다. 스스로 걸어 다니는 중에 끌면
         // 스핀이 충전돼 놓는 순간 팽이처럼 돌아 버린다. 멈추려면 잡기 단축키를 쓴다.
         if (AutoMoveOn) return;
@@ -736,6 +754,7 @@ public partial class SlimeWindow : Window
     }
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
+        if (MoveSprite3D(e)) return;
         if (AutoMoveOn) return;
         var c = CursorPhysical();
         if (_spinDragging) SetSpinFromCursor(c);
@@ -1117,6 +1136,7 @@ public partial class SlimeWindow : Window
 
     private void OnRendering(object? sender, EventArgs e)
     {
+        if (_settings.Skin == SlimeSkinKind.Sprite3D && (!IsVisible || !_settings.SlimeVisible)) { StopRendering(); return; }
         double now = Now;
         double dt = now - _lastFrameTime;
         _lastFrameTime = now;
@@ -1131,6 +1151,12 @@ public partial class SlimeWindow : Window
         _hitTextOverlay?.Render(_hitText.Active);
         bool netsAlive = TickHoops(dt); // 골대 그물 스프링(어느 상태에서도 진행)
 
+        if (Sprite3DOn && _spriteMotion?.IsDragging == true)
+        {
+            TickSprite3D(dt, Vector2.Zero);
+            return;
+        }
+
         if (_isDragging)
         {
             SetExpression(SlimeExpression.Normal);
@@ -1138,6 +1164,7 @@ public partial class SlimeWindow : Window
             _physics.SpinAngle += _physics.AngularVelocity * dt; // 충전 중 시각 회전
             ApplyWindowPosition();
             _animation.Tick(dt, Vector2.Zero, _physics.SpinAngle);
+            TickSprite3D(dt, Vector2.Zero);
             UpdateSpinFx();
             return;
         }
@@ -1145,7 +1172,7 @@ public partial class SlimeWindow : Window
         if (_settings.Paused)
         {
             _animation.Tick(dt, Vector2.Zero, _physics.SpinAngle);
-            if (_physics.IsAtRest && _animation.IsResting && !particlesAlive && !hitTextAlive && !netsAlive)
+            if ((Sprite3DOn || _physics.IsAtRest) && _animation.IsResting && !particlesAlive && !hitTextAlive && !netsAlive)
                 StopRendering();
             return;
         }
@@ -1159,6 +1186,8 @@ public partial class SlimeWindow : Window
             OnAutoMoveCollision(r.CollisionNormal); // 꺾인 방향을 heading 에 반영(벽에 붙는 것 방지)
             _animation.OnImpact(r.MaxImpactSpeed);
             TriggerImpactEffects(r.MaxImpactSpeed, r.CollisionNormal, r.CollisionPosition);
+            if (Sprite3DOn && ImpactClassifier.Classify(r.MaxImpactSpeed, _settings) != ImpactTier.None)
+                _spriteMotion?.Impact(ImpactClassifier.Intensity01(r.MaxImpactSpeed, _settings), r.CollisionNormal);
             if (r.MaxImpactSpeed > _settings.ImpactReferenceSpeed * DizzyImpactFraction)
                 _dizzyUntil = now + DizzyDurationSeconds;
             // 농구공: 벽에 튈 때마다 씸 무늬 변경
@@ -1189,6 +1218,7 @@ public partial class SlimeWindow : Window
             : _physics.Velocity.Length > _settings.ImpactReferenceSpeed * FlyingSpeedFraction ? SlimeExpression.Flying
             : SlimeExpression.Normal);
         (SkinHost.Content as PetSkin)?.SetMotion(_physics.Velocity.X, _physics.Velocity.Length);
+        TickSprite3D(dt, _physics.Velocity);
 
         // 날아가는 동안 미뤄 둔 설정 변경(스킨·크기)을 멈춘 순간 반영한다.
         if (_physics.IsAtRest) FlushDeferredSettings();
@@ -1196,7 +1226,7 @@ public partial class SlimeWindow : Window
         // 완전히 멈추고 형태도 안정되고 파티클도 없고 표정도 원상복귀되면 루프 정지(유휴).
         // 구겨진 종이비행기는 바닥에서 펴져야 하므로 그때까진 루프를 유지한다.
         if (r.Sleeping && _animation.IsResting && !particlesAlive && !hitTextAlive && !netsAlive
-            && now >= _dizzyUntil && PaperSkin?.IsCrumpled != true)
+            && now >= _dizzyUntil && PaperSkin?.IsCrumpled != true && !Sprite3DBusy)
             StopRendering();
     }
 
@@ -1374,9 +1404,11 @@ public partial class SlimeWindow : Window
                 UpdateAutoMoveNotice(); // 안내에 적힌 단축키도 새로 맞춘다
                 break;
             case nameof(AppSettings.Paused):
+                if (_spriteCandidate || _spriteMotion?.IsDragging == true) CancelSprite3DInteraction();
                 if (!_settings.Paused) EnsureRendering();
                 break;
             case nameof(AppSettings.SlimeVisible):
+                if (!_settings.SlimeVisible) CancelSprite3DInteraction();
                 ApplyVisibility();
                 break;
             case nameof(AppSettings.ShowUsageTips):
@@ -1419,6 +1451,7 @@ public partial class SlimeWindow : Window
     /// <summary>선택된 스킨(UserControl)을 스킨 호스트에 넣는다. 스킨 추가는 여기만 확장.</summary>
     private void ApplySkin()
     {
+        CancelSprite3DInteraction();
         SkinHost.Content = _settings.Skin switch
         {
             // 당구공: 4구/3구 중이면 흰 수구, 아니면 검은 8번공
@@ -1431,6 +1464,7 @@ public partial class SlimeWindow : Window
             SlimeSkinKind.Bowling => new BowlingSkin(),
             SlimeSkinKind.PaperPlane => new PaperPlaneSkin(),
             SlimeSkinKind.Pet => MakePetSkin(),
+            SlimeSkinKind.Sprite3D => MakeSprite3D(),
             _ => new JellySkin(),
         };
         _expression = SlimeExpression.Normal; // 새 스킨은 기본 표정으로 시작
@@ -1442,6 +1476,8 @@ public partial class SlimeWindow : Window
     /// <summary>현재 테마의 커스텀 이미지를 공 위에 덧씌운다(없거나 끄면 숨김). 자동 이동 중에는 숨긴다.</summary>
     private void ApplyCustomImage()
     {
+        if (_deferredWhileFlying.Contains(nameof(AppSettings.Skin)) && IsBallInFlight) return;
+        if (_settings.Skin == SlimeSkinKind.Sprite3D) { RefreshSprite3DImage(); return; }
         // 자동 이동 중에는 걸음 자세(원본 컷)가 그려지므로, 그 위에 고정 이미지를 덧씌우면 어긋난다.
         var img = _settings.SkinImageEnabled && !AutoMoveOn && SkinImageStore.Supports(_settings.Skin)
             ? SkinImageStore.Load(_settings.Skin)
@@ -2131,7 +2167,7 @@ public partial class SlimeWindow : Window
         {
             Type = MsgType.SetTheme,
             From = _selfNodeId,
-            Data = RelayJson.ToElement(new SetThemeData { Theme = skin.ToString() }),
+            Data = RelayJson.ToElement(new SetThemeData { Theme = RoomSkinName(skin) }),
         });
     }
 
@@ -2155,7 +2191,7 @@ public partial class SlimeWindow : Window
     /// <summary>지금 내 설정으로 요약을 만든다(방장용).</summary>
     private RoomStyleData BuildStyleFromSettings() => new()
     {
-        Skin = _settings.Skin.ToString(),
+        Skin = RoomSkinName(_settings.Skin),
         ThrowPower = _settings.ThrowPower,
         Restitution = _settings.Restitution,
         Softness = _settings.Softness,
@@ -2199,7 +2235,7 @@ public partial class SlimeWindow : Window
 
         var data = new RoomStyleData
         {
-            Skin = _settings.Skin.ToString(),
+            Skin = RoomSkinName(_settings.Skin),
             ThrowPower = _settings.ThrowPower,
             Restitution = _settings.Restitution,
             Softness = _settings.Softness,
@@ -2252,8 +2288,11 @@ public partial class SlimeWindow : Window
             {
                 try
                 {
-                    byte[] png = Convert.FromBase64String(d.ImagePng);
-                    File.WriteAllBytes(SkinImageStore.PathFor(imgSkin), png);
+                    if (imgSkin == SlimeSkinKind.Sprite3D)
+                    {
+                        if (!SkinImageStore.ImportSprite3DRoomImage(d.ImagePng)) throw new InvalidDataException("3D image rejected.");
+                    }
+                    else File.WriteAllBytes(SkinImageStore.PathFor(imgSkin), Convert.FromBase64String(d.ImagePng));
                     SkinImageStore.Invalidate(imgSkin);
                     _settings.SkinImages[imgSkin.ToString()] = "(방장 이미지)";
                     _settings.NotifySkinImagesChanged();
@@ -2261,8 +2300,7 @@ public partial class SlimeWindow : Window
                 catch (Exception ex) { Logger.Error("Failed to save room style image.", ex); }
             }
 
-            if (Enum.TryParse<SlimeSkinKind>(d.Skin, ignoreCase: true, out var skin))
-                _settings.Skin = skin;
+            _settings.Skin = ParseRoomSkin(d.Skin);
 
             // 던지기 가중치는 0 이면 던지기가 죽는다(속도 = 마우스속도 × 0). 슬라이더 최솟값이
             // 0.3 이라 그보다 작은 값은 방장이 보낼 수 없는 값 — 필드가 빠진 메시지로 보고 무시한다.
@@ -2302,7 +2340,7 @@ public partial class SlimeWindow : Window
     private void ApplyRoomTheme(string? theme)
     {
         if (string.IsNullOrWhiteSpace(theme)) return;
-        if (!Enum.TryParse<SlimeSkinKind>(theme, ignoreCase: true, out var skin)) return;
+        var skin = ParseRoomSkin(theme);
         if (_settings.Skin == skin) return;
         _settings.Skin = skin; // PropertyChanged → ApplySkin
     }
@@ -2356,6 +2394,7 @@ public partial class SlimeWindow : Window
     /// <summary>릴레이 활성화(설정 존재 시). 물리 area 를 네트워크 인지형으로 교체.</summary>
     private void SetupNetworking()
     {
+        if (!_enableExternalIntegrations) return;
         _networked = true;
         _selfNodeId = _auth.NodeId;
         _netArea = new NetworkedWalkableArea(_monitors);
@@ -2365,7 +2404,7 @@ public partial class SlimeWindow : Window
             _physics, _settings, _netArea,
             () => { var vb = _monitors.VirtualBounds; return new Bounds(vb.Left, vb.Top, vb.Width, vb.Height); },
             env => { if (_relay != null) _ = _relay.SendAsync(env); })
-        { SelfNodeId = _selfNodeId };
+        { SelfNodeId = _selfNodeId, CaptureVisualState = CaptureSprite3DState, RestoreVisualState = RestoreSprite3DState };
         if (_auth.Links.Count > 0) _coord.SetLinks(_auth.Links);
         _relay.MessageReceived += env => Dispatcher.InvokeAsync(() => OnRelayMessage(env));
         _relay.StateChanged += st => Dispatcher.InvokeAsync(() => OnRelayState(st));
@@ -3371,6 +3410,7 @@ public partial class SlimeWindow : Window
 
     private void LoseBall()
     {
+        CancelSprite3DInteraction();
         _ownsBall = false;
         Hide();
         StopRendering();
@@ -3379,6 +3419,7 @@ public partial class SlimeWindow : Window
     /// <summary>핸드오프 전송 후: 공은 다른 PC로 갔으므로 숨기고 유휴. 소유권은 결과 대기.</summary>
     private void HideBallForHandoff()
     {
+        CancelSprite3DInteraction();
         Hide();
         StopRendering();
         StartHandoffWatchdog();
@@ -3446,6 +3487,7 @@ public partial class SlimeWindow : Window
 
     public void ShutdownCleanup()
     {
+        CancelSprite3DInteraction();
         _shuttingDown = true;
         StopRendering();
         StopHandoffWatchdog();
@@ -3469,7 +3511,7 @@ public partial class SlimeWindow : Window
         // 그래서 "끄고 다시 켰는데 이전 방으로 공이 넘어간다"는 문제가 있었다.
         try
         {
-            if (_auth.Enabled)
+            if (_enableExternalIntegrations && _auth.Enabled)
             {
                 _auth.Enabled = false;
                 _auth.Save();
@@ -3477,7 +3519,7 @@ public partial class SlimeWindow : Window
             }
         }
         catch (Exception ex) { Logger.Error("Failed to disable multi-PC on shutdown.", ex); }
-        if (_hwnd != IntPtr.Zero)
+        if (_enableExternalIntegrations && _hwnd != IntPtr.Zero)
         {
             UnregisterHotKey(_hwnd, CatchHotkeyId);
             UnregisterHotKey(_hwnd, HideHotkeyId);
@@ -3491,6 +3533,11 @@ public partial class SlimeWindow : Window
         MouseLeftButtonDown -= OnMouseLeftButtonDown;
         MouseMove -= OnMouseMove;
         MouseLeftButtonUp -= OnMouseLeftButtonUp;
+        PreviewMouseRightButtonDown -= OnSpriteRightDown;
+        PreviewMouseRightButtonUp -= OnSpriteRightUp;
+        ContextMenuOpening -= OnSpriteContextMenu;
+        LostMouseCapture -= OnSpriteCaptureLost;
+        Deactivated -= OnSpriteDeactivated;
 
         // 테마가 띄운 창(당구공·농구골대·볼링 레인/핀/점수판)과 오버레이를 모두 정리한다.
         // 각 단계를 따로 감싸는 이유: 한 곳에서 예외가 나면 그 뒤 정리가 통째로 건너뛰어져

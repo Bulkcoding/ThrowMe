@@ -445,7 +445,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         get => _autoMove;
         set
         {
-            if (value != AutoMoveMode.Off && _skin != SlimeSkinKind.Jelly) value = AutoMoveMode.Off;
+            if (value != AutoMoveMode.Off && _skin is not (SlimeSkinKind.Jelly or SlimeSkinKind.Sprite3D)) value = AutoMoveMode.Off;
             if (value != AutoMoveMode.Off && InfiniteBounce) InfiniteBounce = false;
             Set(ref _autoMove, value);
         }
@@ -582,7 +582,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         {
             if (!Set(ref _skin, value)) return;
             // 자동 이동은 슬라임(젤리) 전용이다. 다른 테마로 바꾸면 끈다.
-            if (value != SlimeSkinKind.Jelly && _autoMove != AutoMoveMode.Off) AutoMove = AutoMoveMode.Off;
+            if (value is not (SlimeSkinKind.Jelly or SlimeSkinKind.Sprite3D) && _autoMove != AutoMoveMode.Off) AutoMove = AutoMoveMode.Off;
         }
     }
 

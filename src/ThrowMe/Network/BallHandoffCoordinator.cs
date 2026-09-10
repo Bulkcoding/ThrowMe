@@ -26,6 +26,11 @@ public sealed class BallHandoffCoordinator
     private Vector2 _savedVelocity;
     private double _pendingSince;   // 넘기기 시작한 시각(초) — 응답 없을 때의 안전망용
     private int _seq;
+    private HandoffData? _savedVisualState;
+    private readonly HashSet<(string From, string Id)> _received = new();
+    private readonly Queue<(string From, string Id)> _receivedOrder = new();
+    public Action<HandoffData>? CaptureVisualState { get; set; }
+    public Action<HandoffData>? RestoreVisualState { get; set; }
 
     public string SelfNodeId { get; set; } = "";
 
@@ -77,6 +82,8 @@ public sealed class BallHandoffCoordinator
         HandoffData data = HandoffMath.Pack(
             id, via, exit, b, center, _physics.Velocity,
             _physics.AngularVelocity, _physics.SurfaceSpin, _physics.SpinShotDir, _physics.SpinAngle);
+        CaptureVisualState?.Invoke(data);
+        _savedVisualState = data;
 
         _send(new Envelope
         {
@@ -108,7 +115,7 @@ public sealed class BallHandoffCoordinator
         if (_pendingOutId == null || r.HandoffId != _pendingOutId) return ResultKind.Ignored;
         _pendingOutId = null;
 
-        if (r.Accepted) return ResultKind.Released;
+        if (r.Accepted) { _savedVisualState = null; return ResultKind.Released; }
         return ReflectPending("server said: " + (r.Reason ?? "rejected"));
     }
 
@@ -141,6 +148,8 @@ public sealed class BallHandoffCoordinator
     /// <summary>넘기려던 공을 다시 화면 안으로 반사시켜 회수한다.</summary>
     private ResultKind ReflectPending(string reason)
     {
+        if (_savedVisualState != null) RestoreVisualState?.Invoke(_savedVisualState);
+        _savedVisualState = null;
         Vector2 n = HandoffMath.OutwardNormal(_pendingExitEdge);
         double vn = _savedVelocity.X * n.X + _savedVelocity.Y * n.Y;
         _physics.Velocity = _savedVelocity - n * ((1 + _settings.Restitution) * vn);
@@ -180,6 +189,14 @@ public sealed class BallHandoffCoordinator
     {
         HandoffData? d = env.DataAs<HandoffData>();
         if (d == null) return false;
+        if (string.IsNullOrEmpty(d.HandoffId) || d.HandoffId.Length > 128) return false;
+        var receipt = (env.From ?? "", d.HandoffId);
+        if (_received.Contains(receipt))
+        {
+            _send(new Envelope { Type=MsgType.Ack, From=SelfNodeId, To=env.From,
+                Data=RelayJson.ToElement(new AckData { HandoffId=d.HandoffId, Accepted=true }) });
+            return false; // 응답만 반복하고 이미 넘겨받은 공을 되감지 않는다.
+        }
 
         // viaLink 로 링크를 찾아 진입 엣지·flip 을 얻는다(없으면 viaLink 파싱으로 폴백).
         EdgeLinkDto? link = _links.FirstOrDefault(l =>
@@ -228,6 +245,9 @@ public sealed class BallHandoffCoordinator
         _physics.SurfaceSpin = s.SurfaceSpin;
         _physics.SpinShotDir = s.SpinShotDir;
         _physics.SpinAngle = s.SpinAngle;
+        RestoreVisualState?.Invoke(d);
+        _received.Add(receipt); _receivedOrder.Enqueue(receipt);
+        if (_receivedOrder.Count > 128) _received.Remove(_receivedOrder.Dequeue());
 
         _send(new Envelope
         {
