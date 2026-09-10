@@ -279,6 +279,102 @@
                                         </StackPanel>
                                     </Border>
 
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                                <TextBlock Style="{StaticResource CardIcon}" Text="&#xE7C9;"/>
+                                                <TextBlock Style="{StaticResource CardTitle}" Text="동작"/>
+                                            </StackPanel>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Throw Mode (던지기)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ThrowMode}"/>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Punch Mode (때리기/열기)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding PunchMode}"/>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="항상 위(Always on Top)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding AlwaysOnTop}"/>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="일시 정지" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding Paused}"/>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="슬라임 표시" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding SlimeVisible}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                </StackPanel>
+
+                                <!-- ── 오른쪽 열 ── -->
+                                <StackPanel Grid.Column="2">
+
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                                <TextBlock Style="{StaticResource CardIcon}" Text="&#xE7F4;"/>
+                                                <TextBlock Style="{StaticResource CardTitle}" Text="시스템"/>
+                                            </StackPanel>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="작업표시줄 표시" Style="{StaticResource RowLabel}"/>
+                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="Alt+Tab 목록에 ThrowMe 를 표시합니다."/>
+                                                </StackPanel>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowInTaskbar}"/>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="210"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="클릭 여유" Style="{StaticResource RowLabel}"/>
+                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="공 주변 클릭 허용 범위"/>
+                                                </StackPanel>
+                                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
+                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="120" Value="{Binding ClickMarginPx}"/>
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding ClickMarginPx, StringFormat={}{0:0}px}"/>
+                                                </Grid>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="알림 표시" Style="{StaticResource RowLabel}"/>
+                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="공이 다른 PC로 넘어가면 우측 하단에 알려줍니다."/>
+                                                </StackPanel>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowToasts}"/>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="사용법 힌트" Style="{StaticResource RowLabel}"/>
+                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="사용 중간중간 우측 하단에 짧게 알려줍니다."/>
+                                                </StackPanel>
+                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowUsageTips}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
                                     <!-- ── 자동 이동 ── -->
                                     <Border Style="{StaticResource Card}">
                                         <StackPanel>
@@ -364,45 +460,6 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                                <TextBlock Style="{StaticResource CardIcon}" Text="&#xE7C9;"/>
-                                                <TextBlock Style="{StaticResource CardTitle}" Text="동작"/>
-                                            </StackPanel>
-
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Throw Mode (던지기)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ThrowMode}"/>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="Punch Mode (때리기/열기)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding PunchMode}"/>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="항상 위(Always on Top)" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding AlwaysOnTop}"/>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="일시 정지" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding Paused}"/>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="슬라임 표시" Style="{StaticResource RowLabel}" VerticalAlignment="Center"/>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding SlimeVisible}"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
-
                                     <!-- 당구공 스킨일 때만 보인다 -->
                                     <Border x:Name="BilliardSection" Style="{StaticResource Card}">
                                         <StackPanel>
@@ -417,62 +474,6 @@
                                                     <TextBlock Style="{StaticResource InfoIcon}" ToolTip="공 근처를 눌러 큐대를 당겨 밀어서 발사합니다."/>
                                                 </StackPanel>
                                                 <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding CueStickMode}"/>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-
-                                <!-- ── 오른쪽 열 ── -->
-                                <StackPanel Grid.Column="2">
-
-                                    <Border Style="{StaticResource Card}">
-                                        <StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                                <TextBlock Style="{StaticResource CardIcon}" Text="&#xE7F4;"/>
-                                                <TextBlock Style="{StaticResource CardTitle}" Text="시스템"/>
-                                            </StackPanel>
-
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="작업표시줄 표시" Style="{StaticResource RowLabel}"/>
-                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="Alt+Tab 목록에 ThrowMe 를 표시합니다."/>
-                                                </StackPanel>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowInTaskbar}"/>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="210"/></Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="클릭 여유" Style="{StaticResource RowLabel}"/>
-                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="공 주변 클릭 허용 범위"/>
-                                                </StackPanel>
-                                                <Grid Grid.Column="1" VerticalAlignment="Center">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
-                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="0" Maximum="120" Value="{Binding ClickMarginPx}"/>
-                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding ClickMarginPx, StringFormat={}{0:0}px}"/>
-                                                </Grid>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="알림 표시" Style="{StaticResource RowLabel}"/>
-                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="공이 다른 PC로 넘어가면 우측 하단에 알려줍니다."/>
-                                                </StackPanel>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowToasts}"/>
-                                            </Grid>
-                                            <Border Style="{StaticResource RowDivider}"/>
-
-                                            <Grid>
-                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="사용법 힌트" Style="{StaticResource RowLabel}"/>
-                                                    <TextBlock Style="{StaticResource InfoIcon}" ToolTip="사용 중간중간 우측 하단에 짧게 알려줍니다."/>
-                                                </StackPanel>
-                                                <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" IsChecked="{Binding ShowUsageTips}"/>
                                             </Grid>
                                         </StackPanel>
                                     </Border>
