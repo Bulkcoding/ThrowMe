@@ -477,44 +477,39 @@
                                             </Grid>
                                         </StackPanel>
                                     </Border>
+
+                                    <!-- ── 초기화(오른쪽 열에 두어 두 열 높이를 맞춘다) ── -->
+                                    <Border Style="{StaticResource Card}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                <TextBlock Style="{StaticResource CardIcon}" Text="&#xE7A7;"/>
+                                                <TextBlock Style="{StaticResource CardTitle}" Text="초기화"/>
+                                            </StackPanel>
+                                            <TextBlock Style="{StaticResource RowDesc}" Margin="0" TextWrapping="Wrap"
+                                                       Text="공이 화면 밖으로 사라졌거나 설정이 꼬였을 때 되돌립니다."/>
+                                            <TextBlock Style="{StaticResource RowDesc}" TextWrapping="Wrap"
+                                                       Text="설정 초기화는 테마·소리·단축키를 모두 기본값으로 돌립니다. 방 코드·비밀번호와 직접 그린 그림 파일은 지워지지 않습니다."/>
+                                            <TextBlock Style="{StaticResource RowDesc}" TextWrapping="Wrap"
+                                                       Text="이 설정 창이 떠 있을 때 Ctrl + R 을 눌러도 설정 초기화가 실행됩니다."/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                                <Button Style="{StaticResource OutlineButton}" MinWidth="150" Click="OnResetPosition">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Style="{StaticResource BtnIcon}" Text="&#xE707;"/>
+                                                        <TextBlock Text="위치 초기화"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource AccentOutlineButton}" MinWidth="150" Margin="12,0,0,0"
+                                                        Click="OnResetSettings">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Style="{StaticResource BtnIcon}" Text="&#xE713;"/>
+                                                        <TextBlock Text="설정 초기화"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </Grid>
-
-                            <!-- ── 초기화(전체 폭) ── -->
-                            <Border Style="{StaticResource Card}">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                        <TextBlock Style="{StaticResource CardIcon}" Text="&#xE7A7;"/>
-                                        <TextBlock Style="{StaticResource CardTitle}" Text="초기화"/>
-                                    </StackPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                                            <TextBlock Style="{StaticResource RowDesc}" Margin="0"
-                                                       Text="공이 화면 밖으로 사라졌거나 설정이 꼬였을 때 되돌립니다."/>
-                                            <TextBlock Style="{StaticResource RowDesc}"
-                                                       Text="설정 초기화는 테마·소리·단축키를 모두 기본값으로 돌립니다. 방 코드·비밀번호와 직접 그린 그림 파일은 지워지지 않습니다."/>
-                                            <TextBlock Style="{StaticResource RowDesc}"
-                                                       Text="이 설정 창이 떠 있을 때 Ctrl + R 을 눌러도 설정 초기화가 실행됩니다."/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Button Style="{StaticResource OutlineButton}" MinWidth="150" Click="OnResetPosition">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Style="{StaticResource BtnIcon}" Text="&#xE707;"/>
-                                                    <TextBlock Text="위치 초기화"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Style="{StaticResource AccentOutlineButton}" MinWidth="150" Margin="12,0,0,0"
-                                                    Click="OnResetSettings">
-                                                <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Style="{StaticResource BtnIcon}" Text="&#xE713;"/>
-                                                    <TextBlock Text="설정 초기화"/>
-                                                </StackPanel>
-                                            </Button>
-                                        </StackPanel>
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
 
                             <!-- ── CLI 연동 ── -->
                             <Border Style="{StaticResource Card}">
