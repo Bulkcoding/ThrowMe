@@ -128,6 +128,21 @@ public sealed class AppSettings : INotifyPropertyChanged
         set => _restitutionBeforeInfinite = value;
     }
 
+    /// <summary>
+    /// 무한 튕기기 + CLI 연동일 때 세션이 일하는 동안(생각 중·작업 중·서브에이전트)의 목표 속도(px/s).
+    /// 화면 배율(<see cref="DisplayScale"/>)을 곱해 쓴다. 세션이 없으면 쓰지 않는다.
+    /// </summary>
+    private double _bounceWorkSpeed = 3000.0;
+    public double BounceWorkSpeed { get => _bounceWorkSpeed; set => Set(ref _bounceWorkSpeed, value); }
+
+    /// <summary>같은 조건에서 세션이 쉬는 동안(완료·대기·승인 대기·오류)의 목표 속도(px/s).</summary>
+    private double _bounceIdleSpeed = 250.0;
+    public double BounceIdleSpeed { get => _bounceIdleSpeed; set => Set(ref _bounceIdleSpeed, value); }
+
+    /// <summary>슬라이더 범위(= UI Minimum/Maximum). 이 밖의 값은 손상으로 보고 되돌린다.</summary>
+    public const double MinBounceWorkSpeed = 500.0, MaxBounceWorkSpeed = 8000.0;
+    public const double MinBounceIdleSpeed = 50.0, MaxBounceIdleSpeed = 1500.0;
+
     /// <summary>배율까지 반영한 실제 속도 상한. 코드에서는 항상 이 값을 쓴다.</summary>
     [JsonIgnore] public double EffectiveMaxSpeed => MaxSpeed * SpeedLimitScale;
 
@@ -207,6 +222,19 @@ public sealed class AppSettings : INotifyPropertyChanged
         {
             Services.Logger.Info($"Repaired invalid SlowdownScale ({SlowdownScale}) -> 1.0.");
             SlowdownScale = 1.0;
+            repairedAny = true;
+        }
+        // 세션 연동 속도. 범위 밖이면 기본값으로(0 이면 공이 안 움직이고, 너무 크면 이펙트가 매 프레임 터진다).
+        if (!(BounceWorkSpeed >= MinBounceWorkSpeed && BounceWorkSpeed <= MaxBounceWorkSpeed))
+        {
+            Services.Logger.Info($"Repaired invalid BounceWorkSpeed ({BounceWorkSpeed}) -> 3000.");
+            BounceWorkSpeed = 3000.0;
+            repairedAny = true;
+        }
+        if (!(BounceIdleSpeed >= MinBounceIdleSpeed && BounceIdleSpeed <= MaxBounceIdleSpeed))
+        {
+            Services.Logger.Info($"Repaired invalid BounceIdleSpeed ({BounceIdleSpeed}) -> 250.");
+            BounceIdleSpeed = 250.0;
             repairedAny = true;
         }
 

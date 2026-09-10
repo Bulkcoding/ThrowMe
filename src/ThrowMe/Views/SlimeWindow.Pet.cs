@@ -64,8 +64,10 @@ public partial class SlimeWindow
     private void OnAgentState(AgentState s)
     {
         if (_agentState == s) return;
+        var previous = _agentState;
         _agentState = s;
         (SkinHost.Content as PetSkin)?.SetAgentState(s);
+        OnSessionBounceStateChanged(previous, s);   // 무한 튕기기 세션 연동(조건이 아니면 아무것도 안 함)
         CliStatusChanged?.Invoke(this, EventArgs.Empty);
     }
 

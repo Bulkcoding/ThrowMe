@@ -1152,6 +1152,7 @@ public partial class SlimeWindow : Window
 
         if (PaperPlaneOn) TickPaperPlaneAero(dt); // 종이비행기: 양력·흔들림·마우스 바람
         TickAutoMove(dt);                         // 자동 이동: 추진력 갱신(꺼져 있으면 0)
+        TickSessionBounce();                      // 무한 튕기기 + 세션 연동: 속도 크기를 목표값으로(없으면 아무것도 안 함)
 
         PhysicsStepResult r = _physics.Update(dt);
         if (r.Collided)

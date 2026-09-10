@@ -148,6 +148,13 @@ public partial class SettingsWindow : Window
         RestitutionDesc.ToolTip = locked
             ? "무한 튕기기가 켜져 있어 100% 로 고정됩니다."
             : "벽에 튕기는 반발력.";
+
+        // 세션 연동 속도는 무한 튕기기에서만 쓰이므로 반대로 잠근다(꺼져 있으면 비활성).
+        bool bounceOn = _settings.InfiniteBounce;
+        BounceWorkRow.IsEnabled = bounceOn;
+        BounceWorkRow.Opacity = bounceOn ? 1.0 : 0.45;
+        BounceIdleRow.IsEnabled = bounceOn;
+        BounceIdleRow.Opacity = bounceOn ? 1.0 : 0.45;
     }
 
     /// <summary>사이드바가 접혀 있는가(아이콘만 보이는 상태).</summary>

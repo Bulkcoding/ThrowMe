@@ -239,6 +239,43 @@
                                                 <CheckBox Grid.Column="1" Style="{StaticResource Toggle}" VerticalAlignment="Center"
                                                           IsChecked="{Binding InfiniteBounce}"/>
                                             </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <!-- 세션 연동 속도: 무한 튕기기 + CLI 연동일 때만 쓰인다. 무한 튕기기가 꺼져 있으면 잠근다. -->
+                                            <Grid x:Name="BounceWorkRow">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="작업 중 속도" Style="{StaticResource RowLabel}"/>
+                                                        <TextBlock x:Name="BounceWorkDesc" Style="{StaticResource InfoIcon}"
+                                                                   ToolTip="무한 튕기기 + CLI 연동일 때, Claude Code 세션이 일하는 동안(생각 중·작업 중·서브에이전트) 공이 튕기는 속도(px/s)입니다.&#10;멈춰 있던 공도 세션이 일을 시작하면 스스로 출발합니다. 세션이 없으면 던진 속도를 그대로 유지합니다. 슬라임 테마에서만 동작합니다."/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="세션이 일하는 동안." Style="{StaticResource RowDesc}"/>
+                                                </StackPanel>
+                                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
+                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="500" Maximum="8000" Value="{Binding BounceWorkSpeed}"/>
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding BounceWorkSpeed, StringFormat={}{0:0}}"/>
+                                                </Grid>
+                                            </Grid>
+                                            <Border Style="{StaticResource RowDivider}"/>
+
+                                            <Grid x:Name="BounceIdleRow">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="190"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="쉬는 중 속도" Style="{StaticResource RowLabel}"/>
+                                                        <TextBlock x:Name="BounceIdleDesc" Style="{StaticResource InfoIcon}"
+                                                                   ToolTip="세션이 완료·대기·승인 대기·오류 상태일 때 공이 튕기는 속도(px/s)입니다."/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="세션이 쉬는 동안." Style="{StaticResource RowDesc}"/>
+                                                </StackPanel>
+                                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/></Grid.ColumnDefinitions>
+                                                    <Slider Grid.Column="0" Style="{StaticResource DarkSlider}" Minimum="50" Maximum="1500" Value="{Binding BounceIdleSpeed}"/>
+                                                    <TextBlock Grid.Column="1" Style="{StaticResource RowValue}" Text="{Binding BounceIdleSpeed, StringFormat={}{0:0}}"/>
+                                                </Grid>
+                                            </Grid>
                                         </StackPanel>
                                     </Border>
 
