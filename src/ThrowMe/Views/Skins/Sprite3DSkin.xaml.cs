@@ -154,6 +154,7 @@ public partial class Sprite3DSkin : UserControl
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
+            dc.PushTransform(new ScaleTransform(1.2, 1.2, 128, 128));
             var ink = new SolidColorBrush(Color.FromRgb(20, 68, 59));
             dc.DrawEllipse(ink, null, new Point(91, 114), 10, 15);
             dc.DrawEllipse(ink, null, new Point(165, 114), 10, 15);
@@ -168,6 +169,7 @@ public partial class Sprite3DSkin : UserControl
             dc.DrawGeometry(null, new Pen(ink, 5) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, smile);
             dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(135, 246, 136, 165)), null, new Point(69, 141), 14, 7);
             dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(135, 246, 136, 165)), null, new Point(187, 141), 14, 7);
+            dc.Pop();
         }
         var bitmap = new RenderTargetBitmap(256, 256, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(visual);
