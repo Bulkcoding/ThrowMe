@@ -30,20 +30,11 @@ public sealed class Sprite3DMotion
 
     public void SyncSpin(double angle) => _spinBase = double.IsFinite(angle) ? angle : 0;
 
-    public static Vector3D Project(double x, double y)
-    {
-        if (!double.IsFinite(x) || !double.IsFinite(y)) return new Vector3D(0, 0, 1);
-        // 먼저 큰 좌표를 제한하여 제곱 시 넘침을 피한다.
-        x = Math.Clamp(x, -1e6, 1e6); y = Math.Clamp(y, -1e6, 1e6);
-        double length = Math.Sqrt(x * x + y * y);
-        return length > 1 ? new Vector3D(x / length, -y / length, 0)
-                          : new Vector3D(x, -y, Math.Sqrt(Math.Max(0, 1 - length * length)));
-    }
-
     public void BeginDrag(double x, double y, double time, double spin)
     {
         CancelDrag();
-        _lastPoint = Project(x, y);
+        if (!double.IsFinite(x) || !double.IsFinite(y)) return;
+        _lastPoint = new Vector3D(x, y, 0);
         _lastDragTime = double.IsFinite(time) ? time : 0;
         IsDragging = true;
         SyncSpin(spin);
@@ -51,13 +42,14 @@ public sealed class Sprite3DMotion
 
     public void DragTo(double x, double y, double time)
     {
-        if (!IsDragging || !double.IsFinite(time) || time <= _lastDragTime) return;
-        Vector3D point = Project(x, y);
-        double dot = Math.Clamp(Vector3D.DotProduct(_lastPoint, point), -1, 1);
-        Vector3D axis = Vector3D.CrossProduct(_lastPoint, point);
-        double angle = Math.Acos(dot) * 180 / Math.PI;
-        if (axis.LengthSquared < 1e-12 && dot < 0)
-            axis = Vector3D.CrossProduct(_lastPoint, Math.Abs(_lastPoint.Y) < 0.9 ? new Vector3D(0, 1, 0) : new Vector3D(1, 0, 0));
+        if (!IsDragging || !double.IsFinite(x) || !double.IsFinite(y)
+            || !double.IsFinite(time) || time <= _lastDragTime) return;
+        Vector3D point = new(x, y, 0);
+        // 반지름 단위 이동량을 회전각으로 바꿔 공 밖에서도 같은 감도로 계속 회전한다.
+        Vector3D delta = point - _lastPoint;
+        Vector3D axis = new(delta.Y, delta.X, 0);
+        double angle = axis.Length * 180 / Math.PI;
+        if (!double.IsFinite(angle)) return;
         if (axis.LengthSquared > 1e-12 && angle > 1e-6)
         {
             axis.Normalize();
